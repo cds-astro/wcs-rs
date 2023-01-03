@@ -13,46 +13,37 @@ mod utils;
 use crate::projection::WCSCanonicalProjection;
 
 // Imports
-use fitsrs::hdu::{DataRead, HDU};
+use fitsrs::hdu::Header;
 use mapproj::{
-    img2celestial::Img2Celestial,
-    img2proj::{WcsImgXY2ProjXY, WcsWithSipImgXY2ProjXY},
     conic::{cod::Cod, coe::Coe, coo::Coo, cop::Cop},
     cylindrical::{car::Car, cea::Cea, cyp::Cyp, mer::Mer},
+    img2celestial::Img2Celestial,
+    img2proj::{WcsImgXY2ProjXY, WcsWithSipImgXY2ProjXY},
     pseudocyl::{ait::Ait, mol::Mol, par::Par, sfl::Sfl},
     zenithal::{
-        air::Air,
-        arc::Arc,
-        azp::Azp,
-        sin::Sin,
-        stg::Stg,
-        szp::Szp,
-        tan::Tan,
-        zea::Zea,
-        zpn::Zpn,
+        air::Air, arc::Arc, azp::Azp, sin::Sin, stg::Stg, szp::Szp, tan::Tan, zea::Zea, zpn::Zpn,
     },
 };
+
 use paste::paste;
+/// macro
 macro_rules! create_specific_proj {
-    ( $proj_name:ident, $header:expr, $ctype1:expr, $crpix1:expr, $crpix2:expr, $img2proj:expr ) => {
-        {
-            let proj = $proj_name::parse_proj(&$header)?;
+    ( $proj_name:ident, $header:expr, $ctype1:expr, $crpix1:expr, $crpix2:expr, $img2proj:expr ) => {{
+        let proj = $proj_name::parse_proj(&$header)?;
 
-            let is_sip_found = &$ctype1[($ctype1.len() - 3)..] == "SIP";
-            if is_sip_found {
-                let sip = sip::parse_sip($header, $crpix1, $crpix2)?;
-                let img2proj = WcsWithSipImgXY2ProjXY::new($img2proj, sip);
+        let is_sip_found = &$ctype1[($ctype1.len() - 3)..] == "SIP";
+        if is_sip_found {
+            let sip = sip::parse_sip($header, $crpix1, $crpix2)?;
+            let img2proj = WcsWithSipImgXY2ProjXY::new($img2proj, sip);
 
-                paste! {    
-                    Ok(WCS::[ <$proj_name Sip> ](Img2Celestial::new(img2proj, proj)))
-                }
-            } else {
-                Ok(WCS::$proj_name(Img2Celestial::new($img2proj, proj)))
+            paste! {
+                Ok(WCS::[ <$proj_name Sip> ](Img2Celestial::new(img2proj, proj)))
             }
+        } else {
+            Ok(WCS::$proj_name(Img2Celestial::new($img2proj, proj)))
         }
-    };
+    }};
 }
-
 
 pub enum WCS {
     // Zenithal
@@ -113,11 +104,7 @@ pub type ImgXY = mapproj::ImgXY;
 pub type LonLat = mapproj::LonLat;
 
 impl WCS {
-    pub fn new<'a, R>(hdu: &HDU<'a, R>) -> Result<Self, Error>
-    where
-        R: DataRead<'a> + 'a,
-    {
-        let header = &hdu.header;
+    pub fn new(header: &Header) -> Result<Self, Error> {
         // 1. Identify the image <-> intermediate projection
         // a. Linear transformation matrix cases:
         // - CRPIXi + CDij
@@ -155,15 +142,8 @@ impl WCS {
             let cd21 = header.get_parsed::<f64>(b"CD2_1   ").unwrap_or(Ok(0.0))?;
             let cd22 = header.get_parsed::<f64>(b"CD2_2   ").unwrap_or(Ok(1.0))?;
 
-            WcsImgXY2ProjXY::from_cd(
-                crpix1,
-                crpix2,
-                cd11,
-                cd12,
-                cd21,
-                cd22,
-            )
-        };        
+            WcsImgXY2ProjXY::from_cd(crpix1, crpix2, cd11, cd12, cd21, cd22)
+        };
 
         // 2. Identify the projection type
         let ctype1 = utils::retrieve_mandatory_parsed_keyword::<String>(header, "CTYPE1  ")?;
@@ -272,7 +252,6 @@ impl WCS {
             WCS::Coo(wcs) => wcs.lonlat2img(lonlat),
 
             /* Sip variants */
-
             // Zenithal
             WCS::AzpSip(wcs) => wcs.lonlat2img(lonlat),
             WCS::SzpSip(wcs) => wcs.lonlat2img(lonlat),
@@ -365,25 +344,26 @@ impl WCS {
 #[cfg(test)]
 mod tests {
     use super::WCS;
+    use crate::mapproj::Projection;
     use fitsrs::fits::Fits;
-    use fitsrs::hdu::{HDU, Header};
     use fitsrs::hdu::data::DataOwned;
-    use mapproj::{ImgXY, LonLat, CanonicalProjection};
+    use fitsrs::hdu::{Header, HDU};
+    use glob::glob;
+    use mapproj::{CanonicalProjection, ImgXY, LonLat};
     use std::f64::consts::PI;
     use std::fs::File;
     use std::io::BufReader;
-    use crate::mapproj::Projection;
-    use glob::glob;
 
     #[test]
     fn test_visualize() {
         let f = File::open("examples/cutout-CDS_P_PanSTARRS_DR1_g.fits").unwrap();
 
-        let Fits { hdu } = Fits::from_reader(BufReader::new(f)).unwrap();
-        let wcs = WCS::new(&hdu).unwrap();
+        let Fits {
+            hdu: HDU { header, data },
+        } = Fits::from_reader(BufReader::new(f)).unwrap();
+        let wcs = WCS::new(&header).unwrap();
 
         // Parse data
-        let HDU { header, data } = hdu;
         let data = match data {
             DataOwned::F32(it) => it.collect::<Vec<_>>(),
             _ => unreachable!(),
@@ -414,7 +394,12 @@ mod tests {
         reproject_fits_image(mapproj::conic::coe::Coe::new(), &wcs, &header, &data);
     }
 
-    fn reproject_fits_image<'a, T: CanonicalProjection>(proj: T, wcs: &WCS, header: &Header, data: &[f32]) {
+    fn reproject_fits_image<'a, T: CanonicalProjection>(
+        proj: T,
+        wcs: &WCS,
+        header: &Header,
+        data: &[f32],
+    ) {
         let scale = header
             .get_parsed::<f64>(b"BSCALE  ")
             .unwrap_or(Ok(1.0))
@@ -423,7 +408,6 @@ mod tests {
             .get_parsed::<f64>(b"BZERO   ")
             .unwrap_or(Ok(0.0))
             .unwrap() as f32;
-
 
         let width = *header.get_axis_size(1).unwrap();
         let height = *header.get_axis_size(2).unwrap();
@@ -458,7 +442,8 @@ mod tests {
                             let ix = (proj_x * (WIDTH_IMAGE as f64)) as usize;
                             let iy = (proj_y * (HEIGHT_IMAGE as f64)) as usize;
 
-                            let pixel = imgbuf.get_pixel_mut(ix as u32, iy as u32);
+                            let pixel = imgbuf
+                                .get_pixel_mut(ix as u32, (HEIGHT_IMAGE as u32) - iy as u32 - 1);
                             *pixel = image::Rgb([grayscale_val, grayscale_val, grayscale_val]);
                         }
                     }
@@ -466,7 +451,10 @@ mod tests {
             }
         }
 
-        let filename = &format!("tests/reproj/fits-{}.jpeg", <T as CanonicalProjection>::WCS_NAME);
+        let filename = &format!(
+            "tests/reproj/fits-{}.jpeg",
+            <T as CanonicalProjection>::WCS_NAME
+        );
         imgbuf.save(filename).unwrap();
     }
 
@@ -485,15 +473,16 @@ mod tests {
         //let f = File::open("examples/FOCx38i0101t_c0f.fits").unwrap();
         //let f = File::open("examples/pc.fits").unwrap();
 
-        let Fits { hdu } = Fits::from_reader(BufReader::new(f)).unwrap();
-        let wcs = WCS::new(&hdu).unwrap();
+        let Fits {
+            hdu: HDU { header, .. },
+        } = Fits::from_reader(BufReader::new(f)).unwrap();
+        let wcs = WCS::new(&header).unwrap();
 
         use std::fs::File;
         // Build the CSV reader and iterate over each record.
         //let f = File::open("examples/pc.fits.csv").unwrap();
         let f = File::open("examples/cutout-CDS_P_PanSTARRS_DR1_g.fits.csv").unwrap();
         //let f = File::open("examples/FOCx38i0101t_c0f.fits.csv").unwrap();
-
         //let f = File::open("examples/cutout-CDS_P_HST_PHAT_F475W.fits.csv").unwrap();
 
         let mut rdr = csv::Reader::from_reader(BufReader::new(f));
@@ -507,9 +496,6 @@ mod tests {
 
             if ra.is_finite() && dec.is_finite() {
                 if let Some(img_xy) = wcs.proj_lonlat(&LonLat::new(ra, dec)) {
-                    println!("{:?}", img_xy.x() - x);
-                    println!("{:?}", img_xy.y() - y);
-
                     assert_delta!(img_xy.x(), x, 1e-4);
                     assert_delta!(img_xy.y(), y, 1e-4);
                 }
@@ -523,8 +509,9 @@ mod tests {
             if let Ok(path) = dbg!(entry) {
                 let f = File::open(path).unwrap();
 
-                let Fits { hdu } = Fits::from_reader(BufReader::new(f)).unwrap();
-                let header = &hdu.header;
+                let Fits {
+                    hdu: HDU { header, .. },
+                } = Fits::from_reader(BufReader::new(f)).unwrap();
                 let crval1 = header
                     .get_parsed::<f64>(b"CRVAL1  ")
                     .unwrap_or(Ok(0.0))
@@ -541,7 +528,7 @@ mod tests {
                     .get_parsed::<f64>(b"CRPIX2  ")
                     .unwrap_or(Ok(0.0))
                     .unwrap();
-                let wcs = WCS::new(&hdu).unwrap();
+                let wcs = WCS::new(&header).unwrap();
 
                 // crval to crpix
                 let proj_px = wcs

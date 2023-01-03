@@ -3,7 +3,5 @@
 /target
 /Cargo.lock
 
-fits-viewer.jpeg
-
 // internal scripts
 crval_to_crpix.py

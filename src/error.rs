@@ -1,6 +1,9 @@
 quick_error! {
     #[derive(Debug)]
     pub enum Error {
+        IoFile(err: std::io::Error) {
+            from()
+        }
         /// Encountered when parsing the Fits file, returned from fitsrs
         FitsParsing(err: fitsrs::error::Error) {
             from()
