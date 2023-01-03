@@ -22,8 +22,8 @@ for filename in input_files:
     X = np.random.random(100) * naxis1
     Y = np.random.random(100) * naxis2
 
-    coord = w.pixel_to_world(X, Y)
-    ra, dec = (coord.ra.to_value(u.rad), coord.dec.to_value(u.rad))
+    coord = w.wcs_pix2world(np.vstack((X, Y)).T, 0)
+    ra, dec = ((coord[:, 0] * u.deg).to_value(u.rad), (coord[:, 1] * u.deg).to_value(u.rad))
 
     tab = np.column_stack((ra, dec, X, Y))
     np.savetxt(filename + ".csv", tab, delimiter=",")

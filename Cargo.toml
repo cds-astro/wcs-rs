@@ -10,6 +10,7 @@ mapproj = "0.3.0"
 enum_dispatch = "0.3.8"
 fitsrs = { package = "fitsrs", git = 'https://github.com/cds-astro/fitsrs', branch = 'reader' }
 quick-error = "2.0.1"
+paste = "1.0.11"
 
 [dev-dependencies]
 image = "0.24.5"

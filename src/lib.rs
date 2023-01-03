@@ -4,8 +4,11 @@ extern crate mapproj;
 extern crate quick_error;
 
 mod error;
+
 use error::Error;
 mod projection;
+mod sip;
+mod utils;
 
 use crate::projection::WCSCanonicalProjection;
 
@@ -13,8 +16,7 @@ use crate::projection::WCSCanonicalProjection;
 use fitsrs::hdu::{DataRead, HDU};
 use mapproj::{
     img2celestial::Img2Celestial,
-    img2proj::WcsImgXY2ProjXY,
-    LonLat,
+    img2proj::{WcsImgXY2ProjXY, WcsWithSipImgXY2ProjXY},
     conic::{cod::Cod, coe::Coe, coo::Coo, cop::Cop},
     cylindrical::{car::Car, cea::Cea, cyp::Cyp, mer::Mer},
     pseudocyl::{ait::Ait, mol::Mol, par::Par, sfl::Sfl},
@@ -30,6 +32,27 @@ use mapproj::{
         zpn::Zpn,
     },
 };
+use paste::paste;
+macro_rules! create_specific_proj {
+    ( $proj_name:ident, $header:expr, $ctype1:expr, $crpix1:expr, $crpix2:expr, $img2proj:expr ) => {
+        {
+            let proj = $proj_name::parse_proj(&$header)?;
+
+            let is_sip_found = &$ctype1[($ctype1.len() - 3)..] == "SIP";
+            if is_sip_found {
+                let sip = sip::parse_sip($header, $crpix1, $crpix2)?;
+                let img2proj = WcsWithSipImgXY2ProjXY::new($img2proj, sip);
+
+                paste! {    
+                    Ok(WCS::[ <$proj_name Sip> ](Img2Celestial::new(img2proj, proj)))
+                }
+            } else {
+                Ok(WCS::$proj_name(Img2Celestial::new($img2proj, proj)))
+            }
+        }
+    };
+}
+
 
 pub enum WCS {
     // Zenithal
@@ -57,10 +80,37 @@ pub enum WCS {
     Cod(Img2Celestial<Cod, WcsImgXY2ProjXY>),
     Coe(Img2Celestial<Coe, WcsImgXY2ProjXY>),
     Coo(Img2Celestial<Coo, WcsImgXY2ProjXY>),
+
+    // SIP handling
+    // Zenithal
+    AzpSip(Img2Celestial<Azp, WcsWithSipImgXY2ProjXY>),
+    SzpSip(Img2Celestial<Szp, WcsWithSipImgXY2ProjXY>),
+    TanSip(Img2Celestial<Tan, WcsWithSipImgXY2ProjXY>),
+    StgSip(Img2Celestial<Stg, WcsWithSipImgXY2ProjXY>),
+    SinSip(Img2Celestial<Sin, WcsWithSipImgXY2ProjXY>),
+    ArcSip(Img2Celestial<Arc, WcsWithSipImgXY2ProjXY>),
+    ZpnSip(Img2Celestial<Zpn, WcsWithSipImgXY2ProjXY>),
+    ZeaSip(Img2Celestial<Zea, WcsWithSipImgXY2ProjXY>),
+    AirSip(Img2Celestial<Air, WcsWithSipImgXY2ProjXY>),
+    // Cylindrical
+    CypSip(Img2Celestial<Cyp, WcsWithSipImgXY2ProjXY>),
+    CeaSip(Img2Celestial<Cea, WcsWithSipImgXY2ProjXY>),
+    CarSip(Img2Celestial<Car, WcsWithSipImgXY2ProjXY>),
+    MerSip(Img2Celestial<Mer, WcsWithSipImgXY2ProjXY>),
+    // Pseudo-Cylindrical
+    SflSip(Img2Celestial<Sfl, WcsWithSipImgXY2ProjXY>),
+    ParSip(Img2Celestial<Par, WcsWithSipImgXY2ProjXY>),
+    MolSip(Img2Celestial<Mol, WcsWithSipImgXY2ProjXY>),
+    AitSip(Img2Celestial<Ait, WcsWithSipImgXY2ProjXY>),
+    // Conic
+    CopSip(Img2Celestial<Cop, WcsWithSipImgXY2ProjXY>),
+    CodSip(Img2Celestial<Cod, WcsWithSipImgXY2ProjXY>),
+    CoeSip(Img2Celestial<Coe, WcsWithSipImgXY2ProjXY>),
+    CooSip(Img2Celestial<Coo, WcsWithSipImgXY2ProjXY>),
 }
 
 pub type ImgXY = mapproj::ImgXY;
-pub type XYZ = mapproj::XYZ;
+pub type LonLat = mapproj::LonLat;
 
 impl WCS {
     pub fn new<'a, R>(hdu: &HDU<'a, R>) -> Result<Self, Error>
@@ -113,207 +163,144 @@ impl WCS {
                 cd21,
                 cd22,
             )
-        };
+        };        
 
         // 2. Identify the projection type
-        let ctype1 = header
-            .get_parsed::<String>(b"CTYPE1  ")
-            .unwrap_or(Ok(String::from("RA---TAN")))?;
-        let _ = header
-            .get_parsed::<String>(b"CTYPE2  ")
-            .unwrap_or(Ok(String::from("DEC--TAN")))?;
+        let ctype1 = utils::retrieve_mandatory_parsed_keyword::<String>(header, "CTYPE1  ")?;
+        let _ = utils::retrieve_mandatory_parsed_keyword::<String>(header, "CTYPE2  ")?;
 
-        let proj_name = &ctype1[5..];
-        match proj_name {
+        let proj_name = &ctype1[5..=7];
+
+        match proj_name.as_bytes() {
             // Zenithal
-            "AZP" => {
-                let proj = Azp::parse_proj(&header)?;
-                Ok(WCS::Azp(Img2Celestial::new(img2proj, proj)))
+            b"AZP" => {
+                create_specific_proj!(Azp, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "SZP" => {
-                let proj = Szp::parse_proj(&header)?;
-                Ok(WCS::Szp(Img2Celestial::new(img2proj, proj)))
+            b"SZP" => {
+                create_specific_proj!(Szp, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "TAN" => {
-                let proj = Tan::parse_proj(&header)?;
-                Ok(WCS::Tan(Img2Celestial::new(img2proj, proj)))
+            b"TAN" => {
+                create_specific_proj!(Tan, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "STG" => {
-                let proj = Stg::parse_proj(&header)?;
-                Ok(WCS::Stg(Img2Celestial::new(img2proj, proj)))
+            b"STG" => {
+                create_specific_proj!(Stg, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "SIN" => {
-                let proj = Sin::parse_proj(&header)?;
-                Ok(WCS::Sin(Img2Celestial::new(img2proj, proj)))
+            b"SIN" => {
+                create_specific_proj!(Sin, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "ARC" => {
-                let proj = Arc::parse_proj(&header)?;
-                Ok(WCS::Arc(Img2Celestial::new(img2proj, proj)))
+            b"ARC" => {
+                create_specific_proj!(Arc, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "ZPN" => {
-                let proj = Zpn::parse_proj(&header)?;
-                Ok(WCS::Zpn(Img2Celestial::new(img2proj, proj)))
+            b"ZPN" => {
+                create_specific_proj!(Zpn, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "ZEA" => {
-                let proj = Zea::parse_proj(&header)?;
-                Ok(WCS::Zea(Img2Celestial::new(img2proj, proj)))
+            b"ZEA" => {
+                create_specific_proj!(Zea, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "AIR" => {
-                let proj = Air::parse_proj(&header)?;
-                Ok(WCS::Air(Img2Celestial::new(img2proj, proj)))
+            b"AIR" => {
+                create_specific_proj!(Air, header, ctype1, crpix1, crpix2, img2proj)
             }
             // Cylindrical
-            "CYP" => {
-                let proj = Cyp::parse_proj(&header)?;
-                Ok(WCS::Cyp(Img2Celestial::new(img2proj, proj)))
+            b"CYP" => {
+                create_specific_proj!(Cyp, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "CEA" => {
-                let proj = Cea::parse_proj(&header)?;
-                Ok(WCS::Cea(Img2Celestial::new(img2proj, proj)))
+            b"CEA" => {
+                create_specific_proj!(Cea, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "CAR" => {
-                let proj = Car::parse_proj(&header)?;
-                Ok(WCS::Car(Img2Celestial::new(img2proj, proj)))
+            b"CAR" => {
+                create_specific_proj!(Car, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "MER" => {
-                let proj = Mer::parse_proj(&header)?;
-                Ok(WCS::Mer(Img2Celestial::new(img2proj, proj)))
+            b"MER" => {
+                create_specific_proj!(Mer, header, ctype1, crpix1, crpix2, img2proj)
             }
             // Pseudo-cylindrical
-            "SFL" => {
-                let proj = Sfl::parse_proj(&header)?;
-                Ok(WCS::Sfl(Img2Celestial::new(img2proj, proj)))
+            b"SFL" => {
+                create_specific_proj!(Sfl, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "PAR" => {
-                let proj = Par::parse_proj(&header)?;
-                Ok(WCS::Par(Img2Celestial::new(img2proj, proj)))
+            b"PAR" => {
+                create_specific_proj!(Par, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "MOL" => {
-                let proj = Mol::parse_proj(&header)?;
-                Ok(WCS::Mol(Img2Celestial::new(img2proj, proj)))
+            b"MOL" => {
+                create_specific_proj!(Mol, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "AIT" => {
-                let proj = Ait::parse_proj(&header)?;
-                Ok(WCS::Ait(Img2Celestial::new(img2proj, proj)))
+            b"AIT" => {
+                create_specific_proj!(Ait, header, ctype1, crpix1, crpix2, img2proj)
             }
             // Conic
-            "COP" => {
-                let proj = Cop::parse_proj(&header)?;
-                Ok(WCS::Cop(Img2Celestial::new(img2proj, proj)))
+            b"COP" => {
+                create_specific_proj!(Cop, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "COD" => {
-                let proj = Cod::parse_proj(&header)?;
-                Ok(WCS::Cod(Img2Celestial::new(img2proj, proj)))
+            b"COD" => {
+                create_specific_proj!(Cod, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "COE" => {
-                let proj = Coe::parse_proj(&header)?;
-                Ok(WCS::Coe(Img2Celestial::new(img2proj, proj)))
+            b"COE" => {
+                create_specific_proj!(Coe, header, ctype1, crpix1, crpix2, img2proj)
             }
-            "COO" => {
-                let proj = Coo::parse_proj(&header)?;
-                Ok(WCS::Coo(Img2Celestial::new(img2proj, proj)))
+            b"COO" => {
+                create_specific_proj!(Coo, header, ctype1, crpix1, crpix2, img2proj)
             }
             _ => Err(Error::NotImplementedProjection(proj_name.to_string())),
         }
     }
 
-    /// Project a 3D vector (XYZ) to the image space (xy) in pixels
-    ///
-    ///
-    pub fn proj(&self, xyz: &XYZ) -> Option<ImgXY> {
+    pub fn proj_lonlat(&self, lonlat: &LonLat) -> Option<ImgXY> {
         let img_xy = match self {
             // Zenithal
-            WCS::Azp(wcs) => wcs.xyz2img(xyz),
-            WCS::Szp(wcs) => wcs.xyz2img(xyz),
-            WCS::Tan(wcs) => wcs.xyz2img(xyz),
-            WCS::Stg(wcs) => wcs.xyz2img(xyz),
-            WCS::Sin(wcs) => wcs.xyz2img(xyz),
-            WCS::Arc(wcs) => wcs.xyz2img(xyz),
-            WCS::Zpn(wcs) => wcs.xyz2img(xyz),
-            WCS::Zea(wcs) => wcs.xyz2img(xyz),
-            WCS::Air(wcs) => wcs.xyz2img(xyz),
+            WCS::Azp(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Szp(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Tan(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Stg(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Sin(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Arc(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Zpn(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Zea(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Air(wcs) => wcs.lonlat2img(lonlat),
             // Pseudo-cyl
-            WCS::Cyp(wcs) => wcs.xyz2img(xyz),
-            WCS::Cea(wcs) => wcs.xyz2img(xyz),
-            WCS::Car(wcs) => wcs.xyz2img(xyz),
-            WCS::Mer(wcs) => wcs.xyz2img(xyz),
+            WCS::Cyp(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Cea(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Car(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Mer(wcs) => wcs.lonlat2img(lonlat),
             // Cylindrical
-            WCS::Sfl(wcs) => wcs.xyz2img(xyz),
-            WCS::Par(wcs) => wcs.xyz2img(xyz),
-            WCS::Mol(wcs) => wcs.xyz2img(xyz),
-            WCS::Ait(wcs) => wcs.xyz2img(xyz),
+            WCS::Sfl(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Par(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Mol(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Ait(wcs) => wcs.lonlat2img(lonlat),
             // Conic
-            WCS::Cop(wcs) => wcs.xyz2img(xyz),
-            WCS::Cod(wcs) => wcs.xyz2img(xyz),
-            WCS::Coe(wcs) => wcs.xyz2img(xyz),
-            WCS::Coo(wcs) => wcs.xyz2img(xyz),
+            WCS::Cop(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Cod(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Coe(wcs) => wcs.lonlat2img(lonlat),
+            WCS::Coo(wcs) => wcs.lonlat2img(lonlat),
+
+            /* Sip variants */
+
+            // Zenithal
+            WCS::AzpSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::SzpSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::TanSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::StgSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::SinSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::ArcSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::ZpnSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::ZeaSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::AirSip(wcs) => wcs.lonlat2img(lonlat),
+            // Pseudo-cyl
+            WCS::CypSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::CeaSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::CarSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::MerSip(wcs) => wcs.lonlat2img(lonlat),
+            // Cylindrical
+            WCS::SflSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::ParSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::MolSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::AitSip(wcs) => wcs.lonlat2img(lonlat),
+            // Conic
+            WCS::CopSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::CodSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::CoeSip(wcs) => wcs.lonlat2img(lonlat),
+            WCS::CooSip(wcs) => wcs.lonlat2img(lonlat),
         };
 
         img_xy.map(|xy| ImgXY::new(xy.x() - 1.0, xy.y() - 1.0))
-    }
-
-    pub fn proj_lonlat(&self, lon: f64, lat: f64) -> Option<ImgXY> {
-        let xyz = &LonLat::new(lon, lat).to_xyz();
-        let img_xy = match self {
-            // Zenithal
-            WCS::Azp(wcs) => wcs.xyz2img(xyz),
-            WCS::Szp(wcs) => wcs.xyz2img(xyz),
-            WCS::Tan(wcs) => wcs.xyz2img(xyz),
-            WCS::Stg(wcs) => wcs.xyz2img(xyz),
-            WCS::Sin(wcs) => wcs.xyz2img(xyz),
-            WCS::Arc(wcs) => wcs.xyz2img(xyz),
-            WCS::Zpn(wcs) => wcs.xyz2img(xyz),
-            WCS::Zea(wcs) => wcs.xyz2img(xyz),
-            WCS::Air(wcs) => wcs.xyz2img(xyz),
-            // Pseudo-cyl
-            WCS::Cyp(wcs) => wcs.xyz2img(xyz),
-            WCS::Cea(wcs) => wcs.xyz2img(xyz),
-            WCS::Car(wcs) => wcs.xyz2img(xyz),
-            WCS::Mer(wcs) => wcs.xyz2img(xyz),
-            // Cylindrical
-            WCS::Sfl(wcs) => wcs.xyz2img(xyz),
-            WCS::Par(wcs) => wcs.xyz2img(xyz),
-            WCS::Mol(wcs) => wcs.xyz2img(xyz),
-            WCS::Ait(wcs) => wcs.xyz2img(xyz),
-            // Conic
-            WCS::Cop(wcs) => wcs.xyz2img(xyz),
-            WCS::Cod(wcs) => wcs.xyz2img(xyz),
-            WCS::Coe(wcs) => wcs.xyz2img(xyz),
-            WCS::Coo(wcs) => wcs.xyz2img(xyz),
-        };
-
-        img_xy.map(|xy| ImgXY::new(xy.x() - 1.0, xy.y() - 1.0))
-    }
-
-    pub fn unproj(&self, img_pos: &ImgXY) -> Option<XYZ> {
-        let img_pos = ImgXY::new(img_pos.x() + 1.0, img_pos.y() + 1.0);
-        match self {
-            // Zenithal
-            WCS::Azp(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Szp(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Tan(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Stg(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Sin(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Arc(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Zpn(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Zea(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Air(wcs) => wcs.img2xyz(&img_pos),
-            // Pseudo-cyl
-            WCS::Cyp(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Cea(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Car(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Mer(wcs) => wcs.img2xyz(&img_pos),
-            // Cylindrical
-            WCS::Sfl(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Par(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Mol(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Ait(wcs) => wcs.img2xyz(&img_pos),
-            // Conic
-            WCS::Cop(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Cod(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Coe(wcs) => wcs.img2xyz(&img_pos),
-            WCS::Coo(wcs) => wcs.img2xyz(&img_pos),
-        }
     }
 
     pub fn unproj_lonlat(&self, img_pos: &ImgXY) -> Option<LonLat> {
@@ -344,6 +331,33 @@ impl WCS {
             WCS::Cod(wcs) => wcs.img2lonlat(&img_pos),
             WCS::Coe(wcs) => wcs.img2lonlat(&img_pos),
             WCS::Coo(wcs) => wcs.img2lonlat(&img_pos),
+
+            /* Sip variants */
+            // Zenithal
+            WCS::AzpSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::SzpSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::TanSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::StgSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::SinSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::ArcSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::ZpnSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::ZeaSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::AirSip(wcs) => wcs.img2lonlat(&img_pos),
+            // Pseudo-cyl
+            WCS::CypSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::CeaSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::CarSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::MerSip(wcs) => wcs.img2lonlat(&img_pos),
+            // Cylindrical
+            WCS::SflSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::ParSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::MolSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::AitSip(wcs) => wcs.img2lonlat(&img_pos),
+            // Conic
+            WCS::CopSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::CodSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::CoeSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCS::CooSip(wcs) => wcs.img2lonlat(&img_pos),
         }
     }
 }
@@ -352,24 +366,55 @@ impl WCS {
 mod tests {
     use super::WCS;
     use fitsrs::fits::Fits;
+    use fitsrs::hdu::{HDU, Header};
     use fitsrs::hdu::data::DataOwned;
-    use mapproj::CanonicalProjection;
-    use mapproj::{ImgXY, LonLat};
+    use mapproj::{ImgXY, LonLat, CanonicalProjection};
+    use std::f64::consts::PI;
     use std::fs::File;
     use std::io::BufReader;
-
+    use crate::mapproj::Projection;
     use glob::glob;
 
     #[test]
-    fn reproject_fits_image() {
-        //let f = File::open("examples/FOCx38i0101t_c0f.fits").unwrap();
+    fn test_visualize() {
         let f = File::open("examples/cutout-CDS_P_PanSTARRS_DR1_g.fits").unwrap();
 
         let Fits { hdu } = Fits::from_reader(BufReader::new(f)).unwrap();
-
         let wcs = WCS::new(&hdu).unwrap();
 
-        let header = &hdu.header;
+        // Parse data
+        let HDU { header, data } = hdu;
+        let data = match data {
+            DataOwned::F32(it) => it.collect::<Vec<_>>(),
+            _ => unreachable!(),
+        };
+
+        reproject_fits_image(mapproj::zenithal::azp::Azp::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::zenithal::szp::Szp::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::zenithal::tan::Tan::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::zenithal::stg::Stg::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::zenithal::sin::Sin::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::zenithal::arc::Arc::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::zenithal::zea::Zea::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::zenithal::air::Air::new(), &wcs, &header, &data);
+
+        reproject_fits_image(mapproj::pseudocyl::mol::Mol::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::pseudocyl::ait::Ait::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::pseudocyl::par::Par::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::pseudocyl::sfl::Sfl::new(), &wcs, &header, &data);
+
+        reproject_fits_image(mapproj::cylindrical::cyp::Cyp::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::cylindrical::cea::Cea::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::cylindrical::car::Car::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::cylindrical::mer::Mer::new(), &wcs, &header, &data);
+
+        reproject_fits_image(mapproj::conic::cod::Cod::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::conic::cop::Cop::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::conic::coo::Coo::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::conic::coe::Coe::new(), &wcs, &header, &data);
+    }
+
+    fn reproject_fits_image<'a, T: CanonicalProjection>(proj: T, wcs: &WCS, header: &Header, data: &[f32]) {
         let scale = header
             .get_parsed::<f64>(b"BSCALE  ")
             .unwrap_or(Ok(1.0))
@@ -379,23 +424,14 @@ mod tests {
             .unwrap_or(Ok(0.0))
             .unwrap() as f32;
 
-        let data = hdu.data;
 
         let width = *header.get_axis_size(1).unwrap();
         let height = *header.get_axis_size(2).unwrap();
 
-        // Parse data
-        let data = match data {
-            DataOwned::F32(it) => it.collect::<Vec<_>>(),
-            _ => unreachable!(),
-        };
-
-        // Define mollweide projection in which we will project
-        let proj = mapproj::pseudocyl::mol::Mol::new();
         //let proj = mapproj::zenithal::sin::Sin::new();
         let bounds = proj.bounds();
-        let x_bounds = bounds.x_bounds().as_ref().unwrap();
-        let y_bounds = bounds.y_bounds().as_ref().unwrap();
+        let x_bounds = bounds.x_bounds().as_ref().unwrap_or(&((-PI)..=PI));
+        let y_bounds = bounds.y_bounds().as_ref().unwrap_or(&((-PI)..=PI));
 
         let x_off = x_bounds.start();
         let x_len = x_bounds.end() - x_bounds.start();
@@ -404,8 +440,7 @@ mod tests {
         let y_len = y_bounds.end() - y_bounds.start();
 
         const WIDTH_IMAGE: usize = 1024;
-        const HEIGHT_IMAGE: usize = WIDTH_IMAGE / 2;
-
+        const HEIGHT_IMAGE: usize = 1024;
         // Create a new ImgBuf with width: imgx and height: imgy
         let mut imgbuf = image::ImageBuffer::new(WIDTH_IMAGE as u32, HEIGHT_IMAGE as u32);
 
@@ -414,8 +449,8 @@ mod tests {
                 let grayscale_val = (data[y * width + x] * scale + offset) as u8;
 
                 let img_xy = ImgXY::new(x as f64, y as f64);
-                if let Some(xyz) = wcs.unproj(&img_xy) {
-                    if let Some(proj_xy) = proj.proj(&xyz) {
+                if let Some(lonlat) = wcs.unproj_lonlat(&img_xy) {
+                    if let Some(proj_xy) = proj.proj_lonlat(&lonlat) {
                         let proj_x = ((proj_xy.x() as f64) - x_off) / x_len; // between 0 and 1
                         let proj_y = ((proj_xy.y() as f64) - y_off) / y_len; // between 0 and 1
 
@@ -431,8 +466,8 @@ mod tests {
             }
         }
 
-        // Save the image as “fractal.png”, the format is deduced from the path
-        imgbuf.save("fits-viewer.jpeg").unwrap();
+        let filename = &format!("tests/reproj/fits-{}.jpeg", <T as CanonicalProjection>::WCS_NAME);
+        imgbuf.save(filename).unwrap();
     }
 
     macro_rules! assert_delta {
@@ -446,17 +481,17 @@ mod tests {
     #[test]
     fn astropy_comparison() {
         //let f = File::open("examples/cutout-CDS_P_HST_PHAT_F475W.fits").unwrap();
-        //let f = File::open("examples/cutout-CDS_P_PanSTARRS_DR1_g.fits").unwrap();
+        let f = File::open("examples/cutout-CDS_P_PanSTARRS_DR1_g.fits").unwrap();
         //let f = File::open("examples/FOCx38i0101t_c0f.fits").unwrap();
-        let f = File::open("examples/pc.fits").unwrap();
+        //let f = File::open("examples/pc.fits").unwrap();
 
         let Fits { hdu } = Fits::from_reader(BufReader::new(f)).unwrap();
         let wcs = WCS::new(&hdu).unwrap();
 
         use std::fs::File;
         // Build the CSV reader and iterate over each record.
-        let f = File::open("examples/pc.fits.csv").unwrap();
-        //let f = File::open("examples/cutout-CDS_P_PanSTARRS_DR1_g.fits.csv").unwrap();
+        //let f = File::open("examples/pc.fits.csv").unwrap();
+        let f = File::open("examples/cutout-CDS_P_PanSTARRS_DR1_g.fits.csv").unwrap();
         //let f = File::open("examples/FOCx38i0101t_c0f.fits.csv").unwrap();
 
         //let f = File::open("examples/cutout-CDS_P_HST_PHAT_F475W.fits.csv").unwrap();
@@ -471,7 +506,7 @@ mod tests {
             let y: f64 = record[3].parse().unwrap();
 
             if ra.is_finite() && dec.is_finite() {
-                if let Some(img_xy) = wcs.proj_lonlat(ra, dec) {
+                if let Some(img_xy) = wcs.proj_lonlat(&LonLat::new(ra, dec)) {
                     println!("{:?}", img_xy.x() - x);
                     println!("{:?}", img_xy.y() - y);
 
@@ -510,7 +545,7 @@ mod tests {
 
                 // crval to crpix
                 let proj_px = wcs
-                    .proj_lonlat(crval1.to_radians(), crval2.to_radians())
+                    .proj_lonlat(&LonLat::new(crval1.to_radians(), crval2.to_radians()))
                     .unwrap();
                 assert_delta!(proj_px.x(), crpix1 - 1.0, 1e-6);
                 assert_delta!(proj_px.y(), crpix2 - 1.0, 1e-6);
