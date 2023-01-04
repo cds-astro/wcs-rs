@@ -1,5 +1,9 @@
 # WCS parsing library written in pure Rust
 
+[![](https://img.shields.io/crates/v/wcs.svg)](https://crates.io/crates/wcs)
+[![](https://img.shields.io/crates/d/wcs.svg)](https://crates.io/crates/wcs)
+[![API Documentation on docs.rs](https://docs.rs/wcs/badge.svg)](https://docs.rs/wcs/)
+
 This crate must be used conjointly with [fitsrs](https://github.com/cds-astro/fitsrs)
 It takes a FITS header and parse it to define a WCS.
 A WCS object allow two operations:
