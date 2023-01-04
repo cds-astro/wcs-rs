@@ -45,6 +45,12 @@ macro_rules! create_specific_proj {
     }};
 }
 
+/// Main enum structure descripting a WCS object
+/// Once created, the user can proceed two operation on it
+/// * The projection of a (lon, lat) tuple onto the image space.
+///   Results are given in pixels
+/// * The unprojection of a (x, y) tuple given in pixel coordinates onto the sphere.
+///   Results are given as a (lon, lat) tuple expressed in degrees
 pub enum WCS {
     // Zenithal
     Azp(Img2Celestial<Azp, WcsImgXY2ProjXY>),
@@ -100,10 +106,18 @@ pub enum WCS {
     CooSip(Img2Celestial<Coo, WcsWithSipImgXY2ProjXY>),
 }
 
+/// Structure alias coming from mapproj defining
+/// image space pixel coordinates
 pub type ImgXY = mapproj::ImgXY;
+/// Structure alias coming from mapproj defining
+/// longitude and latitude expressed in degrees
 pub type LonLat = mapproj::LonLat;
 
 impl WCS {
+    /// Create a WCS from a specific fits header parsed with fitsrs
+    /// # Param
+    /// * `header`: Header unit coming from fitsrs.
+    ///   This contains all the cards of one HDU.
     pub fn new(header: &Header) -> Result<Self, Error> {
         // 1. Identify the image <-> intermediate projection
         // a. Linear transformation matrix cases:
@@ -223,6 +237,11 @@ impl WCS {
         }
     }
 
+    /// Project a (lon, lat) 3D sphere position to get its corresponding location on the image
+    /// The result is given a (X, Y) tuple expressed in pixel coordinates.
+    /// 
+    /// # Param
+    /// * `lonlat`: the 3D sphere vertex expressed as a (lon, lat) tuple given in degrees
     pub fn proj_lonlat(&self, lonlat: &LonLat) -> Option<ImgXY> {
         let img_xy = match self {
             // Zenithal
@@ -282,6 +301,11 @@ impl WCS {
         img_xy.map(|xy| ImgXY::new(xy.x() - 1.0, xy.y() - 1.0))
     }
 
+    /// Unproject a (X, Y) point from the image space to get its corresponding location on the sphere
+    /// The result is given a (lon, lat) tuple expressed in degrees.
+    /// 
+    /// # Param
+    /// * `img_pos`: the image space point expressed as a (X, Y) tuple given en pixels
     pub fn unproj_lonlat(&self, img_pos: &ImgXY) -> Option<LonLat> {
         let img_pos = ImgXY::new(img_pos.x() + 1.0, img_pos.y() + 1.0);
         match self {

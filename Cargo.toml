@@ -2,13 +2,22 @@
 name = "wcs"
 version = "0.1.0"
 edition = "2021"
+authors = ["Matthieu Baumann <matthieu.baumann@astro.unistra.fr>"]
+description = "Implementation of the FITS World Coordinate System (WCS)"
+license = "Apache-2.0 OR MIT"
+readme = "readme.md"
+categories = ["science", "algorithms"]
+keywords = ["fits", "wcs", "projection"]
+documentation = "https://docs.rs/wcsrs"
+homepage = "https://github.com/cds-astro/wcsrs/"
+repository = "https://github.com/cds-astro/wcsrs/"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 mapproj = "0.3.0"
 enum_dispatch = "0.3.8"
-fitsrs = { package = "fitsrs", git = 'https://github.com/cds-astro/fitsrs', branch = 'master' }
+fitsrs = { package = "fitsrs", git = 'https://github.com/cds-astro/fitsrs', branch = 'master', version = "0.1" }
 quick-error = "2.0.1"
 paste = "1.0.11"
 
