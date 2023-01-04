@@ -1,3 +1,9 @@
+//! This module is an implementation of the SIP standard
+//!
+//! For the SIP convention, see
+//! "The SIP convention for Representing Distortion in FITS Image Headers" by David L. Shupe et al.
+//! in the proceedings of ADASS XIV (2005).
+
 use fitsrs::hdu::Header;
 use mapproj::sip::{Sip, SipAB, SipCoeff};
 
