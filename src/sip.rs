@@ -36,7 +36,6 @@ fn retrieve_sip_coeffs(header: &Header, id: &'static str) -> Result<Option<SipCo
     }
 }
 
-use crate::utils::retrieve_mandatory_parsed_keyword;
 pub fn parse_sip(header: &Header, crpix1: f64, crpix2: f64) -> Result<Sip, Error> {
     // proj SIP coefficients
     let a_coeffs = retrieve_sip_coeffs(header, "A")?.unwrap_or_else(|| SipCoeff::new(Box::new([])));
@@ -52,8 +51,8 @@ pub fn parse_sip(header: &Header, crpix1: f64, crpix2: f64) -> Result<Sip, Error
         _ => None,
     };
 
-    let naxis1 = retrieve_mandatory_parsed_keyword::<f64>(header, "NAXIS1  ")?;
-    let naxis2 = retrieve_mandatory_parsed_keyword::<f64>(header, "NAXIS2  ")?;
+    let naxis1 = *header.get_axis_size(1).ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))? as f64;
+    let naxis2 = *header.get_axis_size(2).ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))? as f64;
 
     let u = (-crpix1)..=(naxis1 - crpix1);
     let v = (-crpix2)..=(naxis2 - crpix2);
