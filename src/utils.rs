@@ -1,4 +1,7 @@
-use fitsrs::hdu::Header;
+use fitsrs::hdu::header::{
+    Header,
+    extension::image::Image
+};
 
 use crate::error::Error;
 
@@ -9,7 +12,7 @@ pub unsafe fn string_to_keyword_type(keyword: &str) -> &[u8; 8] {
 }
 
 pub fn retrieve_mandatory_parsed_keyword<T>(
-    header: &Header,
+    header: &Header<Image>,
     keyword: &'static str,
 ) -> Result<T, Error>
 where

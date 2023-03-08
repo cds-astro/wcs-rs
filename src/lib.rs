@@ -13,7 +13,10 @@ mod utils;
 use crate::projection::WCSCanonicalProjection;
 
 // Imports
-use fitsrs::hdu::Header;
+use fitsrs::hdu::header::{
+    Header,
+    extension::image::Image
+};
 use mapproj::{
     conic::{cod::Cod, coe::Coe, coo::Coo, cop::Cop},
     cylindrical::{car::Car, cea::Cea, cyp::Cyp, mer::Mer},
@@ -74,9 +77,11 @@ impl WCS {
     /// # Param
     /// * `header`: Header unit coming from fitsrs.
     ///   This contains all the cards of one HDU.
-    pub fn new(header: &Header) -> Result<Self, Error> {
-        let naxis1 = header.get_axis_size(1).ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?;
-        let naxis2 = header.get_axis_size(2).ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?;
+    pub fn new(header: &Header<Image>) -> Result<Self, Error> {
+        let xtension = header.get_xtension();
+
+        let naxis1 = xtension.get_naxisn(1).ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?;
+        let naxis2 = xtension.get_naxisn(2).ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?;
 
         let proj = WCSProj::new(header)?;
         Ok(WCS { naxis1: *naxis1 as u64, naxis2: *naxis2 as u64, proj })
@@ -181,7 +186,7 @@ impl WCSProj {
     /// # Param
     /// * `header`: Header unit coming from fitsrs.
     ///   This contains all the cards of one HDU.
-    pub fn new(header: &Header) -> Result<Self, Error> {
+    pub fn new(header: &Header<Image>) -> Result<Self, Error> {
         // 1. Identify the image <-> intermediate projection
         // a. Linear transformation matrix cases:
         // - CRPIXi + CDij
@@ -433,8 +438,13 @@ mod tests {
     use super::WCS;
     use crate::mapproj::Projection;
     use fitsrs::fits::Fits;
-    use fitsrs::hdu::data::DataOwned;
-    use fitsrs::hdu::{Header, HDU};
+    use fitsrs::hdu::{
+        header::{
+            extension::image::Image,
+            Header,
+        },
+        data::image::DataOwned
+    };
     use glob::glob;
     use mapproj::{CanonicalProjection, ImgXY, LonLat};
     use std::f64::consts::PI;
@@ -445,17 +455,17 @@ mod tests {
     fn test_visualize() {
         let f = File::open("examples/panstarrs-rotated-around-orion.fits").unwrap();
 
-        let Fits {
-            hdu: HDU { header, data },
-        } = Fits::from_reader(BufReader::new(f)).unwrap();
-        let wcs = WCS::new(&header).unwrap();
+        let mut reader = BufReader::new(f);
+        let Fits { mut hdu} = Fits::from_reader(&mut reader).unwrap();
 
         // Parse data
-        let data = match data {
+        let data = match hdu.get_data_mut() {
             DataOwned::F32(it) => it.collect::<Vec<_>>(),
             _ => unreachable!(),
         };
 
+        let header = hdu.get_header();
+        let wcs = WCS::new(&header).unwrap();
         reproject_fits_image(mapproj::zenithal::azp::Azp::new(), &wcs, &header, &data);
         reproject_fits_image(mapproj::zenithal::szp::Szp::new(), &wcs, &header, &data);
         reproject_fits_image(mapproj::zenithal::tan::Tan::new(), &wcs, &header, &data);
@@ -484,7 +494,7 @@ mod tests {
     fn reproject_fits_image<'a, T: CanonicalProjection>(
         proj: T,
         wcs: &WCS,
-        header: &Header,
+        header: &Header<Image>,
         data: &[f32],
     ) {
         let scale = header
@@ -496,8 +506,9 @@ mod tests {
             .unwrap_or(Ok(0.0))
             .unwrap() as f32;
 
-        let width = *header.get_axis_size(1).unwrap();
-        let height = *header.get_axis_size(2).unwrap();
+        let xtension = header.get_xtension();
+        let width = *xtension.get_naxisn(1).unwrap();
+        let height = *xtension.get_naxisn(2).unwrap();
 
         //let proj = mapproj::zenithal::sin::Sin::new();
         let bounds = proj.bounds();
@@ -559,11 +570,10 @@ mod tests {
         let f = File::open("examples/cutout-CDS_P_PanSTARRS_DR1_g.fits").unwrap();
         //let f = File::open("examples/FOCx38i0101t_c0f.fits").unwrap();
         //let f = File::open("examples/pc.fits").unwrap();
-
-        let Fits {
-            hdu: HDU { header, .. },
-        } = Fits::from_reader(BufReader::new(f)).unwrap();
-        let wcs = WCS::new(&header).unwrap();
+        let mut reader = BufReader::new(f);
+        let Fits { hdu } = Fits::from_reader(&mut reader).unwrap();
+        let header = hdu.get_header();
+        let wcs = WCS::new(header).unwrap();
 
         use std::fs::File;
         // Build the CSV reader and iterate over each record.
@@ -595,10 +605,9 @@ mod tests {
         for entry in glob("examples/*.fits").unwrap() {
             if let Ok(path) = dbg!(entry) {
                 let f = File::open(path).unwrap();
-
-                let Fits {
-                    hdu: HDU { header, .. },
-                } = Fits::from_reader(BufReader::new(f)).unwrap();
+                let mut reader = BufReader::new(f);
+                let Fits { hdu} = Fits::from_reader(&mut reader).unwrap();
+                let header = hdu.get_header();
                 let crval1 = header
                     .get_parsed::<f64>(b"CRVAL1  ")
                     .unwrap_or(Ok(0.0))
@@ -615,6 +624,7 @@ mod tests {
                     .get_parsed::<f64>(b"CRPIX2  ")
                     .unwrap_or(Ok(0.0))
                     .unwrap();
+
                 let wcs = WCS::new(&header).unwrap();
 
                 // crval to crpix
@@ -633,4 +643,14 @@ mod tests {
             }
         }
     }
+
+    /*#[test]
+    fn open_fits() {
+        let f = File::open("examples/M81_B_GaiaHduImg1.fits").unwrap();
+
+        let mut reader = BufReader::new(f);
+        let Fits { hdu} = Fits::from_reader(&mut reader).unwrap();
+        let header = hdu.get_header();
+        assert!(WCS::new(header).is_err());
+    }*/
 }

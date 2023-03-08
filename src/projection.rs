@@ -24,8 +24,10 @@ use mapproj::{
 
 use super::Error;
 
+use fitsrs::hdu::header::extension::image::Image;
+
 pub trait WCSCanonicalProjection: CanonicalProjection {
-    fn parse_proj(header: &Header) -> Result<CenteredProjection<Self>, Error>
+    fn parse_proj(header: &Header<Image>) -> Result<CenteredProjection<Self>, Error>
     where
         Self: Sized,
     {
@@ -41,14 +43,14 @@ pub trait WCSCanonicalProjection: CanonicalProjection {
         Ok(centered_proj)
     }
 
-    fn parse_internal_proj_params(header: &Header) -> Result<Self, Error>
+    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error>
     where
         Self: Sized;
 }
 
 // Zenithal projections
 impl WCSCanonicalProjection for Azp {
-    fn parse_internal_proj_params(header: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
         // mu given in spherical radii, default value: 0.0
         let mu = header.get_parsed::<f64>(b"PV_1    ").unwrap_or(Ok(0.0))?;
         // gamma given in deg, default value: 0.0
@@ -61,7 +63,7 @@ impl WCSCanonicalProjection for Azp {
 }
 
 impl WCSCanonicalProjection for Szp {
-    fn parse_internal_proj_params(header: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
         // mu given in spherical radii, default value: 0.0
         let mu = header.get_parsed::<f64>(b"PV_1    ").unwrap_or(Ok(0.0))?;
         // phi_c given in deg, default value: 0.0
@@ -76,25 +78,25 @@ impl WCSCanonicalProjection for Szp {
 }
 
 impl WCSCanonicalProjection for Tan {
-    fn parse_internal_proj_params(_: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
         Ok(Tan::new())
     }
 }
 
 impl WCSCanonicalProjection for Stg {
-    fn parse_internal_proj_params(_: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
         Ok(Stg::new())
     }
 }
 
 impl WCSCanonicalProjection for Sin {
-    fn parse_internal_proj_params(_: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
         Ok(Sin::new())
     }
 }
 
 impl WCSCanonicalProjection for SinSlant {
-    fn parse_internal_proj_params(header: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
         // xi dimensionless, default value: 0.0
         let xi = header.get_parsed::<f64>(b"PV_1    ").unwrap_or(Ok(0.0))?;
         // eta dimensionless, default value: 0.0
@@ -106,13 +108,13 @@ impl WCSCanonicalProjection for SinSlant {
 }
 
 impl WCSCanonicalProjection for Arc {
-    fn parse_internal_proj_params(_: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
         Ok(Arc::new())
     }
 }
 
 impl WCSCanonicalProjection for Zpn {
-    fn parse_internal_proj_params(header: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
         let mut coeffs = [
             b"PV_0    ",
             b"PV_1    ",
@@ -161,13 +163,13 @@ impl WCSCanonicalProjection for Zpn {
 }
 
 impl WCSCanonicalProjection for Zea {
-    fn parse_internal_proj_params(_: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
         Ok(Zea::new())
     }
 }
 
 impl WCSCanonicalProjection for Air {
-    fn parse_internal_proj_params(header: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
         // theta_b in deg, default value: 90.0
         let theta_b = header.get_parsed::<f64>(b"PV_1    ").unwrap_or(Ok(90.0))?;
 
@@ -178,7 +180,7 @@ impl WCSCanonicalProjection for Air {
 
 // Cylindrical projections
 impl WCSCanonicalProjection for Cyp {
-    fn parse_internal_proj_params(header: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
         // mu given in spherical radii, default value: 1.0
         let mu = header.get_parsed::<f64>(b"PV_1    ").unwrap_or(Ok(1.0))?;
         // lambda given in spherical radii, default value: 1.0
@@ -190,7 +192,7 @@ impl WCSCanonicalProjection for Cyp {
 }
 
 impl WCSCanonicalProjection for Cea {
-    fn parse_internal_proj_params(header: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
         // lambda given in spherical radii, default value: 1.0
         let lambda = header.get_parsed::<f64>(b"PV_1    ").unwrap_or(Ok(1.0))?;
 
@@ -200,45 +202,45 @@ impl WCSCanonicalProjection for Cea {
 }
 
 impl WCSCanonicalProjection for Car {
-    fn parse_internal_proj_params(_: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
         Ok(Car::default())
     }
 }
 
 impl WCSCanonicalProjection for Mer {
-    fn parse_internal_proj_params(_: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
         Ok(Mer::default())
     }
 }
 
 // Pseudo-cylindrical projections
 impl WCSCanonicalProjection for Sfl {
-    fn parse_internal_proj_params(_: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
         Ok(Sfl::default())
     }
 }
 
 impl WCSCanonicalProjection for Par {
-    fn parse_internal_proj_params(_: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
         Ok(Par::default())
     }
 }
 
 impl WCSCanonicalProjection for Mol {
-    fn parse_internal_proj_params(_: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
         Ok(Mol::default())
     }
 }
 
 impl WCSCanonicalProjection for Ait {
-    fn parse_internal_proj_params(_: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
         Ok(Ait::default())
     }
 }
 
 // Conic projections
 impl WCSCanonicalProjection for Cop {
-    fn parse_internal_proj_params(header: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
         // theta_a given in deg, has no default value
         if let Some(theta_a) = header.get_parsed::<f64>(b"PV_1    ") {
             let theta_a = theta_a?;
@@ -258,7 +260,7 @@ impl WCSCanonicalProjection for Cop {
 }
 
 impl WCSCanonicalProjection for Coe {
-    fn parse_internal_proj_params(header: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
         // theta_a given in deg, has no default value
         if let Some(theta_a) = header.get_parsed::<f64>(b"PV_1    ") {
             let theta_a = theta_a?;
@@ -278,7 +280,7 @@ impl WCSCanonicalProjection for Coe {
 }
 
 impl WCSCanonicalProjection for Cod {
-    fn parse_internal_proj_params(header: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
         // theta_a given in deg, has no default value
         if let Some(theta_a) = header.get_parsed::<f64>(b"PV_1    ") {
             let theta_a = theta_a?;
@@ -298,7 +300,7 @@ impl WCSCanonicalProjection for Cod {
 }
 
 impl WCSCanonicalProjection for Coo {
-    fn parse_internal_proj_params(header: &Header) -> Result<Self, Error> {
+    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
         // theta_a given in deg, has no default value
         if let Some(theta_a) = header.get_parsed::<f64>(b"PV_1    ") {
             let theta_a = theta_a?;
