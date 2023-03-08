@@ -52,8 +52,10 @@ use wcsrs::{
 fn main() {
     // 1. Parse a fits file using fitsrs
     let mut f = File::open("<your fits file path>").unwrap();
+    let mut reader = BufReader::new(f);
+    let Fits { hdu } = Fits::from_reader(&mut reader).unwrap();
 
-    let Fits { hdu: HDU { header, .. } } = Fits::from_reader(BufReader::new(f)).unwrap();
+    let header = hdu.get_header();
     // Get the crval and crpix values along each axes
     let crval1 = header
         .get_parsed::<f64>(b"CRVAL1  ")
