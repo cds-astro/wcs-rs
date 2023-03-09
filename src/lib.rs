@@ -443,7 +443,7 @@ mod tests {
             extension::image::Image,
             Header,
         },
-        data::image::DataOwned
+        data::iter
     };
     use glob::glob;
     use mapproj::{CanonicalProjection, ImgXY, LonLat};
@@ -460,7 +460,7 @@ mod tests {
 
         // Parse data
         let data = match hdu.get_data_mut() {
-            DataOwned::F32(it) => it.collect::<Vec<_>>(),
+            iter::Data::F32(it) => it.collect::<Vec<_>>(),
             _ => unreachable!(),
         };
 
