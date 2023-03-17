@@ -8,6 +8,10 @@ quick_error! {
         FitsParsing(err: fitsrs::error::Error) {
             from()
         }
+        /// Unprojection not defined
+        UnprojNotDefined(img_x: f64, img_y: f64) {
+            display("({}, {}) is out of projection", img_x, img_y)
+        }
         /// Encountered when the projection cannot be instantiated
         /// i.e. Zpn needs coefficients meeting a specific condition
         InitProjection(proj_name: &'static str, msg: &'static str) {

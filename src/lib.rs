@@ -62,6 +62,10 @@ pub struct WCS {
     naxis1: u64,
     /// Height of the image in pixels
     naxis2: u64,
+    /// Field of view of the image along NAXIS1
+    fov1: f64,
+    /// Field of view of the image along NAXIS2
+    fov2: f64,
     /// Main sub structure defining the projection
     proj: WCSProj,
 }
@@ -84,12 +88,45 @@ impl WCS {
         let naxis2 = xtension.get_naxisn(2).ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?;
 
         let proj = WCSProj::new(header)?;
-        Ok(WCS { naxis1: *naxis1 as u64, naxis2: *naxis2 as u64, proj })
+
+        // Compute the field of view along the naxis1 and naxis2 axis
+        let center = proj.unproj_lonlat(&ImgXY::new((*naxis1 as f64) / 2.0, (*naxis2 as f64) / 2.0))
+            .ok_or(Error::UnprojNotDefined((*naxis1 as f64) / 2.0, (*naxis2 as f64) / 2.0))?;
+
+        let half_fov1 = if let Some(top) = proj.unproj_lonlat(&ImgXY::new((*naxis1 as f64) / 2.0, *naxis2 as f64)) {
+            utils::angular_dist(
+                top.into(),
+                center.clone().into()
+            )
+        } else {
+            180.0_f64.to_radians()
+        };
+
+        let half_fov2 = if let Some(left) = proj.unproj_lonlat(&ImgXY::new(0.0, (*naxis2 as f64) / 2.0)) {
+            utils::angular_dist(
+                left.into(),
+                center.into()
+            )
+        } else {
+            180.0_f64.to_radians()
+        };
+
+        Ok(WCS {
+            naxis1: *naxis1 as u64,
+            naxis2: *naxis2 as u64,
+            fov1: half_fov1 * 2.0,
+            fov2: half_fov2 * 2.0,
+            proj: proj,
+        })
     }
 
     /// Returns the dimensions of the image given by the NAXIS1 x NAXIS2 keyword
     pub fn img_dimensions(&self) -> (u64, u64) {
         (self.naxis1, self.naxis2)
+    }
+
+    pub fn field_of_view(&self) -> (f64, f64) {
+        (self.fov1, self.fov2)
     }
 
     /// Project a (lon, lat) 3D sphere position to get its corresponding location on the image
