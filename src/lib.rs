@@ -565,7 +565,7 @@ mod tests {
 
         for y in 0..height {
             for x in 0..width {
-                let grayscale_val = (data[y * width + x] * scale + offset) as u8;
+                let grayscale_val = (data[(y * width + x) as usize] * scale + offset) as u8;
 
                 let img_xy = ImgXY::new(x as f64, y as f64);
                 if let Some(lonlat) = wcs.unproj(&img_xy) {
