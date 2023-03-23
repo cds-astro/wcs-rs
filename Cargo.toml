@@ -13,7 +13,8 @@ homepage = "https://github.com/cds-astro/wcs-rs/"
 repository = "https://github.com/cds-astro/wcs-rs/"
 exclude = [
     "tests/*",
-    "examples/*"
+    "examples/*",
+    "*.py"
 ]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
