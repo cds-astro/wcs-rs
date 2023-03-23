@@ -301,6 +301,9 @@ impl WCSProj {
             b"AIR" => {
                 create_specific_proj!(Air, header, ctype1, crpix1, crpix2, img2proj)
             }
+            b"NCP" => {
+                create_specific_proj!(Ncp, header, ctype1, crpix1, crpix2, img2proj)
+            }
             // Cylindrical
             b"CYP" => {
                 create_specific_proj!(Cyp, header, ctype1, crpix1, crpix2, img2proj)
@@ -517,6 +520,7 @@ mod tests {
         reproject_fits_image(mapproj::zenithal::arc::Arc::new(), &wcs, &header, &data);
         reproject_fits_image(mapproj::zenithal::zea::Zea::new(), &wcs, &header, &data);
         reproject_fits_image(mapproj::zenithal::air::Air::new(), &wcs, &header, &data);
+        reproject_fits_image(mapproj::zenithal::ncp::Ncp::new(), &wcs, &header, &data);
 
         reproject_fits_image(mapproj::pseudocyl::mol::Mol::new(), &wcs, &header, &data);
         reproject_fits_image(mapproj::pseudocyl::ait::Ait::new(), &wcs, &header, &data);
