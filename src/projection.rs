@@ -18,6 +18,7 @@ use mapproj::{
         tan::Tan,
         zea::Zea,
         zpn::Zpn,
+        ncp::Ncp,
     },
     CanonicalProjection, CenteredProjection, LonLat,
 };
@@ -175,6 +176,13 @@ impl WCSCanonicalProjection for Air {
 
         let airy = Air::from_param(theta_b.to_radians());
         Ok(airy)
+    }
+}
+
+impl WCSCanonicalProjection for Ncp {
+    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
+        let ncp = Ncp::new();
+        Ok(ncp)
     }
 }
 

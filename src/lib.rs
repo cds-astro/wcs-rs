@@ -24,7 +24,7 @@ use mapproj::{
     img2proj::{WcsImgXY2ProjXY, WcsWithSipImgXY2ProjXY},
     pseudocyl::{ait::Ait, mol::Mol, par::Par, sfl::Sfl},
     zenithal::{
-        air::Air, arc::Arc, azp::Azp, sin::Sin, stg::Stg, szp::Szp, tan::Tan, zea::Zea, zpn::Zpn,
+        air::Air, arc::Arc, azp::Azp, sin::Sin, stg::Stg, szp::Szp, tan::Tan, zea::Zea, zpn::Zpn, ncp::Ncp
     },
 };
 
@@ -174,6 +174,7 @@ pub enum WCSProj {
     Zpn(Img2Celestial<Zpn, WcsImgXY2ProjXY>),
     Zea(Img2Celestial<Zea, WcsImgXY2ProjXY>),
     Air(Img2Celestial<Air, WcsImgXY2ProjXY>),
+    Ncp(Img2Celestial<Ncp, WcsImgXY2ProjXY>),
     // Cylindrical
     Cyp(Img2Celestial<Cyp, WcsImgXY2ProjXY>),
     Cea(Img2Celestial<Cea, WcsImgXY2ProjXY>),
@@ -201,6 +202,7 @@ pub enum WCSProj {
     ZpnSip(Img2Celestial<Zpn, WcsWithSipImgXY2ProjXY>),
     ZeaSip(Img2Celestial<Zea, WcsWithSipImgXY2ProjXY>),
     AirSip(Img2Celestial<Air, WcsWithSipImgXY2ProjXY>),
+    NcpSip(Img2Celestial<Ncp, WcsWithSipImgXY2ProjXY>),
     // Cylindrical
     CypSip(Img2Celestial<Cyp, WcsWithSipImgXY2ProjXY>),
     CeaSip(Img2Celestial<Cea, WcsWithSipImgXY2ProjXY>),
@@ -359,6 +361,7 @@ impl WCSProj {
             WCSProj::Zpn(wcs) => wcs.lonlat2img(lonlat),
             WCSProj::Zea(wcs) => wcs.lonlat2img(lonlat),
             WCSProj::Air(wcs) => wcs.lonlat2img(lonlat),
+            WCSProj::Ncp(wcs) => wcs.lonlat2img(lonlat),
             // Pseudo-cyl
             WCSProj::Cyp(wcs) => wcs.lonlat2img(lonlat),
             WCSProj::Cea(wcs) => wcs.lonlat2img(lonlat),
@@ -386,6 +389,7 @@ impl WCSProj {
             WCSProj::ZpnSip(wcs) => wcs.lonlat2img(lonlat),
             WCSProj::ZeaSip(wcs) => wcs.lonlat2img(lonlat),
             WCSProj::AirSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSProj::NcpSip(wcs) => wcs.lonlat2img(lonlat),
             // Pseudo-cyl
             WCSProj::CypSip(wcs) => wcs.lonlat2img(lonlat),
             WCSProj::CeaSip(wcs) => wcs.lonlat2img(lonlat),
@@ -424,6 +428,7 @@ impl WCSProj {
             WCSProj::Zpn(wcs) => wcs.img2lonlat(&img_pos),
             WCSProj::Zea(wcs) => wcs.img2lonlat(&img_pos),
             WCSProj::Air(wcs) => wcs.img2lonlat(&img_pos),
+            WCSProj::Ncp(wcs) => wcs.img2lonlat(&img_pos),
             // Pseudo-cyl
             WCSProj::Cyp(wcs) => wcs.img2lonlat(&img_pos),
             WCSProj::Cea(wcs) => wcs.img2lonlat(&img_pos),
@@ -451,6 +456,7 @@ impl WCSProj {
             WCSProj::ZpnSip(wcs) => wcs.img2lonlat(&img_pos),
             WCSProj::ZeaSip(wcs) => wcs.img2lonlat(&img_pos),
             WCSProj::AirSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSProj::NcpSip(wcs) => wcs.img2lonlat(&img_pos),
             // Pseudo-cyl
             WCSProj::CypSip(wcs) => wcs.img2lonlat(&img_pos),
             WCSProj::CeaSip(wcs) => wcs.img2lonlat(&img_pos),
