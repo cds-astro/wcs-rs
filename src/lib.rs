@@ -10,7 +10,7 @@ use error::Error;
 mod projection;
 mod sip;
 mod utils;
-mod coo_system;
+pub mod coo_system;
 
 use crate::projection::WCSCanonicalProjection;
 
