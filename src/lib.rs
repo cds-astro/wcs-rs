@@ -5,10 +5,12 @@ extern crate quick_error;
 
 mod error;
 
+use coo_system::CooSystem;
 use error::Error;
 mod projection;
 mod sip;
 mod utils;
+mod coo_system;
 
 use crate::projection::WCSCanonicalProjection;
 
@@ -40,10 +42,10 @@ macro_rules! create_specific_proj {
             let img2proj = WcsWithSipImgXY2ProjXY::new($img2proj, sip);
 
             paste! {
-                Ok(WCSProj::[ <$proj_name Sip> ](Img2Celestial::new(img2proj, proj)))
+                Ok(WCSCelestialProj::[ <$proj_name Sip> ](Img2Celestial::new(img2proj, proj)))
             }
         } else {
-            Ok(WCSProj::$proj_name(Img2Celestial::new($img2proj, proj)))
+            Ok(WCSCelestialProj::$proj_name(Img2Celestial::new($img2proj, proj)))
         }
     }};
 }
@@ -146,6 +148,11 @@ impl WCS {
     pub fn unproj(&self, img_pos: &ImgXY) -> Option<LonLat> {
         self.proj.unproj_lonlat(img_pos)
     }
+
+    /// Get the coordinate system frame
+    pub fn coo_system(&self) -> &CooSystem {
+        self.proj.coo_system()
+    }
 }
 
 use std::ops::Deref;
@@ -157,13 +164,22 @@ impl Deref for WCS {
     }
 }
 
+pub struct WCSProj {
+    /// The right part of the CTYPE keyword
+    /// The projection type
+    proj: WCSCelestialProj,
+    /// The left part of the CTYPE keyword
+    /// The coordinate system
+    coo_system: CooSystem,
+}
+
 /// Main enum structure descripting a WCS object
 /// Once created, the user can proceed two operation on it
 /// * The projection of a (lon, lat) tuple onto the image space.
 ///   Results are given in pixels
 /// * The unprojection of a (x, y) tuple given in pixel coordinates onto the sphere.
 ///   Results are given as a (lon, lat) tuple expressed in degrees
-pub enum WCSProj {
+pub enum WCSCelestialProj {
     // Zenithal
     Azp(Img2Celestial<Azp, WcsImgXY2ProjXY>),
     Szp(Img2Celestial<Szp, WcsImgXY2ProjXY>),
@@ -320,7 +336,7 @@ impl WCSProj {
 
         let proj_name = &ctype1[5..=7];
 
-        match proj_name.as_bytes() {
+        let proj = match proj_name.as_bytes() {
             // Zenithal
             b"AZP" => {
                 create_specific_proj!(Azp, header, ctype1, crpix1, crpix2, img2proj)
@@ -392,7 +408,14 @@ impl WCSProj {
                 create_specific_proj!(Coo, header, ctype1, crpix1, crpix2, img2proj)
             }
             _ => Err(Error::NotImplementedProjection(proj_name.to_string())),
-        }
+        }?;
+
+        let coo_system = CooSystem::parse(&header)?;
+
+        Ok(WCSProj {
+            proj,
+            coo_system
+        })
     }
 
     /// Project a (lon, lat) 3D sphere position to get its corresponding location on the image
@@ -401,61 +424,61 @@ impl WCSProj {
     /// # Param
     /// * `lonlat`: the 3D sphere vertex expressed as a (lon, lat) tuple given in degrees
     pub fn proj_lonlat(&self, lonlat: &LonLat) -> Option<ImgXY> {
-        let img_xy = match self {
+        let img_xy = match &self.proj {
             // Zenithal
-            WCSProj::Azp(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Szp(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Tan(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Stg(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Sin(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Arc(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Zpn(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Zea(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Air(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Ncp(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Azp(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Szp(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Tan(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Stg(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Sin(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Arc(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Zpn(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Zea(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Air(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Ncp(wcs) => wcs.lonlat2img(lonlat),
             // Pseudo-cyl
-            WCSProj::Cyp(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Cea(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Car(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Mer(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Cyp(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Cea(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Car(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Mer(wcs) => wcs.lonlat2img(lonlat),
             // Cylindrical
-            WCSProj::Sfl(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Par(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Mol(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Ait(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Sfl(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Par(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Mol(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Ait(wcs) => wcs.lonlat2img(lonlat),
             // Conic
-            WCSProj::Cop(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Cod(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Coe(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::Coo(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Cop(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Cod(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Coe(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::Coo(wcs) => wcs.lonlat2img(lonlat),
 
             /* Sip variants */
             // Zenithal
-            WCSProj::AzpSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::SzpSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::TanSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::StgSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::SinSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::ArcSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::ZpnSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::ZeaSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::AirSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::NcpSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::AzpSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::SzpSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::TanSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::StgSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::SinSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::ArcSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::ZpnSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::ZeaSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::AirSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::NcpSip(wcs) => wcs.lonlat2img(lonlat),
             // Pseudo-cyl
-            WCSProj::CypSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::CeaSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::CarSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::MerSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::CypSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::CeaSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::CarSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::MerSip(wcs) => wcs.lonlat2img(lonlat),
             // Cylindrical
-            WCSProj::SflSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::ParSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::MolSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::AitSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::SflSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::ParSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::MolSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::AitSip(wcs) => wcs.lonlat2img(lonlat),
             // Conic
-            WCSProj::CopSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::CodSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::CoeSip(wcs) => wcs.lonlat2img(lonlat),
-            WCSProj::CooSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::CopSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::CodSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::CoeSip(wcs) => wcs.lonlat2img(lonlat),
+            WCSCelestialProj::CooSip(wcs) => wcs.lonlat2img(lonlat),
         };
 
         img_xy.map(|xy| ImgXY::new(xy.x() - 1.0, xy.y() - 1.0))
@@ -468,62 +491,67 @@ impl WCSProj {
     /// * `img_pos`: the image space point expressed as a (X, Y) tuple given en pixels
     pub fn unproj_lonlat(&self, img_pos: &ImgXY) -> Option<LonLat> {
         let img_pos = ImgXY::new(img_pos.x() + 1.0, img_pos.y() + 1.0);
-        match self {
+        match &self.proj {
             // Zenithal
-            WCSProj::Azp(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Szp(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Tan(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Stg(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Sin(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Arc(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Zpn(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Zea(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Air(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Ncp(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Azp(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Szp(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Tan(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Stg(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Sin(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Arc(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Zpn(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Zea(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Air(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Ncp(wcs) => wcs.img2lonlat(&img_pos),
             // Pseudo-cyl
-            WCSProj::Cyp(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Cea(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Car(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Mer(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Cyp(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Cea(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Car(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Mer(wcs) => wcs.img2lonlat(&img_pos),
             // Cylindrical
-            WCSProj::Sfl(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Par(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Mol(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Ait(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Sfl(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Par(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Mol(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Ait(wcs) => wcs.img2lonlat(&img_pos),
             // Conic
-            WCSProj::Cop(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Cod(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Coe(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::Coo(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Cop(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Cod(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Coe(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::Coo(wcs) => wcs.img2lonlat(&img_pos),
 
             /* Sip variants */
             // Zenithal
-            WCSProj::AzpSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::SzpSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::TanSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::StgSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::SinSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::ArcSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::ZpnSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::ZeaSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::AirSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::NcpSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::AzpSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::SzpSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::TanSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::StgSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::SinSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::ArcSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::ZpnSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::ZeaSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::AirSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::NcpSip(wcs) => wcs.img2lonlat(&img_pos),
             // Pseudo-cyl
-            WCSProj::CypSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::CeaSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::CarSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::MerSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::CypSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::CeaSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::CarSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::MerSip(wcs) => wcs.img2lonlat(&img_pos),
             // Cylindrical
-            WCSProj::SflSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::ParSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::MolSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::AitSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::SflSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::ParSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::MolSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::AitSip(wcs) => wcs.img2lonlat(&img_pos),
             // Conic
-            WCSProj::CopSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::CodSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::CoeSip(wcs) => wcs.img2lonlat(&img_pos),
-            WCSProj::CooSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::CopSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::CodSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::CoeSip(wcs) => wcs.img2lonlat(&img_pos),
+            WCSCelestialProj::CooSip(wcs) => wcs.img2lonlat(&img_pos),
         }
+    }
+
+    /// Getter of the coordinate system
+    pub fn coo_system(&self) -> &CooSystem {
+        &self.coo_system
     }
 }
 

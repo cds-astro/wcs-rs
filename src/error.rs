@@ -26,5 +26,9 @@ quick_error! {
         NotImplementedProjection(proj_name: String) {
             display("Projection '{}' has not been implemented!", proj_name)
         }
+        /// Unrecognized radesys error
+        UnrecognizedRadeSys(radesys: String) {
+            display("Unrecognized radesys keyword value: '{}'!", radesys)
+        }
     }
 }
