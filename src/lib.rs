@@ -220,6 +220,64 @@ pub enum WCSProj {
     CooSip(Img2Celestial<Coo, WcsWithSipImgXY2ProjXY>),
 }
 
+fn parse_pc_matrix(header: &Header<Image>) -> Result<Option<(f64, f64, f64, f64)>, Error> {
+    let pc11 = header.get_parsed::<f64>(b"PC1_1   ");
+    let pc12 = header.get_parsed::<f64>(b"PC1_2   ");
+    let pc21 = header.get_parsed::<f64>(b"PC2_1   ");
+    let pc22 = header.get_parsed::<f64>(b"PC2_2   ");
+
+    let pc_matrix_found = match (&pc11, &pc12, &pc21, &pc22) {
+        (None, None, None, None) => {
+            false
+        },
+        // The CD1_1 keyword has been found
+        // We are in a case where the CDij are given 
+        _ => {
+            true
+        }
+    };
+
+    if pc_matrix_found {
+        let pc11 = pc11.unwrap_or(Ok(1.0))?;
+        let pc12 = pc12.unwrap_or(Ok(0.0))?;
+        let pc21 = pc21.unwrap_or(Ok(0.0))?;
+        let pc22 = pc22.unwrap_or(Ok(1.0))?;
+
+        Ok(Some((pc11, pc12, pc21, pc22)))
+    } else {
+        Ok(None)
+    }
+}
+
+fn parse_cd_matrix(header: &Header<Image>) -> Result<Option<(f64, f64, f64, f64)>, Error> {
+    let cd11 = header.get_parsed::<f64>(b"CD1_1   ");
+    let cd12 = header.get_parsed::<f64>(b"CD1_2   ");
+    let cd21 = header.get_parsed::<f64>(b"CD2_1   ");
+    let cd22 = header.get_parsed::<f64>(b"CD2_2   ");
+
+    let cd_matrix_found = match (&cd11, &cd12, &cd21, &cd22) {
+        (None, None, None, None) => {
+            false
+        },
+        // The CD1_1 keyword has been found
+        // We are in a case where the CDij are given 
+        _ => {
+            true
+        }
+    };
+
+    if cd_matrix_found {
+        let cd11 = cd11.unwrap_or(Ok(1.0))?;
+        let cd12 = cd12.unwrap_or(Ok(0.0))?;
+        let cd21 = cd21.unwrap_or(Ok(0.0))?;
+        let cd22 = cd22.unwrap_or(Ok(1.0))?;
+
+        Ok(Some((cd11, cd12, cd21, cd22)))
+    } else {
+        Ok(None)
+    }
+}
+
 impl WCSProj {
     /// Create a WCS from a specific fits header parsed with fitsrs
     /// # Param
@@ -234,36 +292,26 @@ impl WCSProj {
         let crpix1 = header.get_parsed::<f64>(b"CRPIX1  ").unwrap_or(Ok(0.0))?;
         let crpix2 = header.get_parsed::<f64>(b"CRPIX2  ").unwrap_or(Ok(0.0))?;
 
-        let cdelt1 = header.get_parsed::<f64>(b"CDELT1  ");
-
-        let img2proj = if let Some(cdelt1) = cdelt1 {
-            let cdelt1 = cdelt1?;
+        // Choice of the wcs order:
+        // 1 - Priority to define the projection is given to CD
+        // 2 - Then, to the couple PC + CDELT
+        // 3 - Finally to the old CROTA + CDELT convention
+        let img2proj = if let Some((cd11, cd12, cd21, cd22)) = parse_cd_matrix(header)? {
+            // CDij case
+            WcsImgXY2ProjXY::from_cd(crpix1, crpix2, cd11, cd12, cd21, cd22)
+        } else {
+            // Search for CDELTi
+            let cdelt1 = header.get_parsed::<f64>(b"CDELT1  ").unwrap_or(Ok(1.0))?;
             let cdelt2 = header.get_parsed::<f64>(b"CDELT2  ").unwrap_or(Ok(1.0))?;
 
-            let pc11 = header.get_parsed::<f64>(b"PC1_1   ");
-
-            if let Some(pc11) = pc11 {
-                let pc11 = pc11?;
+            if let Some((pc11, pc12, pc21, pc22)) = parse_pc_matrix(header)? {
                 // CDELTi + PCij case
-                let pc12 = header.get_parsed::<f64>(b"PC1_2   ").unwrap_or(Ok(0.0))?;
-                let pc21 = header.get_parsed::<f64>(b"PC2_1   ").unwrap_or(Ok(0.0))?;
-                let pc22 = header.get_parsed::<f64>(b"PC2_2   ").unwrap_or(Ok(1.0))?;
-
                 WcsImgXY2ProjXY::from_pc(crpix1, crpix2, pc11, pc12, pc21, pc22, cdelt1, cdelt2)
             } else {
                 // CDELTi + CROTA2 case
                 let crota2 = header.get_parsed::<f64>(b"CROTA2  ").unwrap_or(Ok(0.0))?;
-
                 WcsImgXY2ProjXY::from_cr(crpix1, crpix2, crota2, cdelt1, cdelt2)
             }
-        } else {
-            // CDij case
-            let cd11 = header.get_parsed::<f64>(b"CD1_1   ").unwrap_or(Ok(1.0))?;
-            let cd12 = header.get_parsed::<f64>(b"CD1_2   ").unwrap_or(Ok(0.0))?;
-            let cd21 = header.get_parsed::<f64>(b"CD2_1   ").unwrap_or(Ok(0.0))?;
-            let cd22 = header.get_parsed::<f64>(b"CD2_2   ").unwrap_or(Ok(1.0))?;
-
-            WcsImgXY2ProjXY::from_cd(crpix1, crpix2, cd11, cd12, cd21, cd22)
         };
 
         // 2. Identify the projection type
