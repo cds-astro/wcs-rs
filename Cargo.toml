@@ -1,6 +1,6 @@
 [package]
 name = "wcs"
-version = "0.2.7"
+version = "0.2.8"
 edition = "2021"
 authors = ["Matthieu Baumann <matthieu.baumann@astro.unistra.fr>"]
 description = "Implementation of the FITS World Coordinate System (WCS)"
@@ -21,7 +21,7 @@ exclude = [
 [dependencies]
 mapproj = "0.3.0"
 enum_dispatch = "0.3.8"
-fitsrs = "0.2.8"
+fitsrs = "0.2.9"
 quick-error = "2.0.1"
 paste = "1.0.11"
 

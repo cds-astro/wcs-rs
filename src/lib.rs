@@ -86,8 +86,8 @@ impl WCS {
     pub fn new(header: &Header<Image>) -> Result<Self, Error> {
         let xtension = header.get_xtension();
 
-        let naxis1 = xtension.get_naxisn(1).ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?;
-        let naxis2 = xtension.get_naxisn(2).ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?;
+        let naxis1 = dbg!(xtension.get_naxisn(1).ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?);
+        let naxis2 = dbg!(xtension.get_naxisn(2).ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?);
 
         let proj = WCSProj::new(header)?;
 
@@ -767,13 +767,14 @@ mod tests {
         }
     }
 
-    /*#[test]
+    #[test]
     fn open_fits() {
-        let f = File::open("examples/M81_B_GaiaHduImg1.fits").unwrap();
+        //let f = File::open("examples/M81_B_GaiaHduImg1.fits").unwrap();
+        let f = File::open("examples/SN2923fxjA.fits").unwrap();
 
         let mut reader = BufReader::new(f);
         let Fits { hdu} = Fits::from_reader(&mut reader).unwrap();
         let header = hdu.get_header();
-        assert!(WCS::new(header).is_err());
-    }*/
+        assert!(WCS::new(header).is_ok());
+    }
 }
