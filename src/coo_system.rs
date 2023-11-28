@@ -1,7 +1,4 @@
-use fitsrs::hdu::header::{
-    Header,
-    extension::image::Image
-};
+use fitsrs::hdu::header::{extension::image::Image, Header};
 
 use crate::error::Error;
 use crate::utils;
@@ -16,7 +13,7 @@ pub enum RadeSys {
     /// mean place, old system but without e-terms
     Fk4NoE,
     /// geocentric apparent place, IAU 1984 system
-    GAPPT
+    GAPPT,
 }
 
 impl RadeSys {
@@ -29,13 +26,10 @@ impl RadeSys {
             "FK4" => Ok(RadeSys::Fk4),
             "FK4-NO-E" => Ok(RadeSys::Fk4NoE),
             "GAPPT" => Ok(RadeSys::GAPPT),
-            _ => {
-                Err(Error::UnrecognizedRadeSys(radesys))
-            }
+            _ => Err(Error::UnrecognizedRadeSys(radesys)),
         }
     }
 }
-
 
 pub enum CooSystem {
     EQUATORIAL,
@@ -43,27 +37,26 @@ pub enum CooSystem {
     ECLIPTIC,
     HELIOECLIPTIC,
     SUPERGALACTIC,
-    CUSTOM {
-        radesys: RadeSys,
-        equinox: f64,
-    }
+    CUSTOM { radesys: RadeSys, equinox: f64 },
 }
 
 impl CooSystem {
     pub fn parse(header: &Header<Image>) -> Result<Self, Error> {
-        let ctype1 = utils::retrieve_mandatory_parsed_keyword::<String>(header, "CTYPE1  ")?;
+        let equinox = utils::retrieve_mandatory_parsed_keyword::<f64>(header, "EQUINOX ");
+        let radesys = RadeSys::parse(header);
 
-        let coo_system = match &ctype1[0..4] {
-            "RA--" => CooSystem::EQUATORIAL,
-            "GLON" => CooSystem::GALACTIC,
-            "ELON" => CooSystem::ECLIPTIC,
-            "HLON" => CooSystem::HELIOECLIPTIC,
-            "SLON" => CooSystem::SUPERGALACTIC,
-            _ => {
-                let radesys = RadeSys::parse(header)?;
-                let equinox = utils::retrieve_mandatory_parsed_keyword::<f64>(header, "EQUINOX ")?;
+        let coo_system = if let (Ok(radesys), Ok(equinox)) = (radesys, equinox) {
+            // if there is a radesys take it into account
+            CooSystem::CUSTOM { radesys, equinox }
+        } else {
+            let ctype1 = utils::retrieve_mandatory_parsed_keyword::<String>(header, "CTYPE1  ")?;
 
-                CooSystem::CUSTOM { radesys, equinox }
+            match ctype1.as_bytes()[0] {
+                b'G' => CooSystem::GALACTIC,
+                b'E' => CooSystem::ECLIPTIC,
+                b'H' => CooSystem::HELIOECLIPTIC,
+                b'S' => CooSystem::SUPERGALACTIC,
+                _ => CooSystem::EQUATORIAL,
             }
         };
 
