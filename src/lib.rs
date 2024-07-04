@@ -7,26 +7,25 @@ mod error;
 
 use coo_system::CooSystem;
 use error::Error;
+pub mod coo_system;
 mod projection;
 mod sip;
 mod utils;
-pub mod coo_system;
 
 use crate::projection::WCSCanonicalProjection;
 
 // Imports
-use fitsrs::hdu::header::{
-    Header,
-    extension::image::Image
-};
+use fitsrs::hdu::header::{extension::image::Image, Header};
 use mapproj::{
     conic::{cod::Cod, coe::Coe, coo::Coo, cop::Cop},
     cylindrical::{car::Car, cea::Cea, cyp::Cyp, mer::Mer},
+    hybrid::hpx::Hpx,
     img2celestial::Img2Celestial,
     img2proj::{WcsImgXY2ProjXY, WcsWithSipImgXY2ProjXY},
     pseudocyl::{ait::Ait, mol::Mol, par::Par, sfl::Sfl},
     zenithal::{
-        air::Air, arc::Arc, azp::Azp, sin::Sin, stg::Stg, szp::Szp, tan::Tan, zea::Zea, zpn::Zpn, ncp::Ncp
+        air::Air, arc::Arc, azp::Azp, ncp::Ncp, sin::Sin, stg::Stg, szp::Szp, tan::Tan, zea::Zea,
+        zpn::Zpn,
     },
 };
 
@@ -45,7 +44,9 @@ macro_rules! create_specific_proj {
                 Ok(WCSCelestialProj::[ <$proj_name Sip> ](Img2Celestial::new(img2proj, proj)))
             }
         } else {
-            Ok(WCSCelestialProj::$proj_name(Img2Celestial::new($img2proj, proj)))
+            Ok(WCSCelestialProj::$proj_name(Img2Celestial::new(
+                $img2proj, proj,
+            )))
         }
     }};
 }
@@ -56,7 +57,6 @@ pub type ImgXY = mapproj::ImgXY;
 /// Structure alias coming from mapproj defining
 /// longitude and latitude expressed in degrees
 pub type LonLat = mapproj::LonLat;
-
 
 pub struct WCS {
     /* Metadata keywords */
@@ -86,32 +86,37 @@ impl WCS {
     pub fn new(header: &Header<Image>) -> Result<Self, Error> {
         let xtension = header.get_xtension();
 
-        let naxis1 = dbg!(xtension.get_naxisn(1).ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?);
-        let naxis2 = dbg!(xtension.get_naxisn(2).ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?);
+        let naxis1 = dbg!(xtension
+            .get_naxisn(1)
+            .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?);
+        let naxis2 = dbg!(xtension
+            .get_naxisn(2)
+            .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?);
 
         let proj = WCSProj::new(header)?;
 
         // Compute the field of view along the naxis1 and naxis2 axis
-        let center = proj.unproj_lonlat(&ImgXY::new((*naxis1 as f64) / 2.0, (*naxis2 as f64) / 2.0))
-            .ok_or(Error::UnprojNotDefined((*naxis1 as f64) / 2.0, (*naxis2 as f64) / 2.0))?;
+        let center = proj
+            .unproj_lonlat(&ImgXY::new((*naxis1 as f64) / 2.0, (*naxis2 as f64) / 2.0))
+            .ok_or(Error::UnprojNotDefined(
+                (*naxis1 as f64) / 2.0,
+                (*naxis2 as f64) / 2.0,
+            ))?;
 
-        let half_fov1 = if let Some(top) = proj.unproj_lonlat(&ImgXY::new((*naxis1 as f64) / 2.0, *naxis2 as f64)) {
-            utils::angular_dist(
-                top.into(),
-                center.clone().into()
-            )
+        let half_fov1 = if let Some(top) =
+            proj.unproj_lonlat(&ImgXY::new((*naxis1 as f64) / 2.0, *naxis2 as f64))
+        {
+            utils::angular_dist(top.into(), center.clone().into())
         } else {
             180.0_f64.to_radians()
         };
 
-        let half_fov2 = if let Some(left) = proj.unproj_lonlat(&ImgXY::new(0.0, (*naxis2 as f64) / 2.0)) {
-            utils::angular_dist(
-                left.into(),
-                center.into()
-            )
-        } else {
-            180.0_f64.to_radians()
-        };
+        let half_fov2 =
+            if let Some(left) = proj.unproj_lonlat(&ImgXY::new(0.0, (*naxis2 as f64) / 2.0)) {
+                utils::angular_dist(left.into(), center.into())
+            } else {
+                180.0_f64.to_radians()
+            };
 
         Ok(WCS {
             naxis1: *naxis1 as u64,
@@ -133,7 +138,7 @@ impl WCS {
 
     /// Project a (lon, lat) 3D sphere position to get its corresponding location on the image
     /// The result is given a (X, Y) tuple expressed in pixel coordinates.
-    /// 
+    ///
     /// # Param
     /// * `lonlat`: the 3D sphere vertex expressed as a (lon, lat) tuple given in degrees
     pub fn proj(&self, lonlat: &LonLat) -> Option<ImgXY> {
@@ -142,7 +147,7 @@ impl WCS {
 
     /// Unproject a (X, Y) point from the image space to get its corresponding location on the sphere
     /// The result is given a (lon, lat) tuple expressed in degrees.
-    /// 
+    ///
     /// # Param
     /// * `img_pos`: the image space point expressed as a (X, Y) tuple given en pixels
     pub fn unproj(&self, img_pos: &ImgXY) -> Option<LonLat> {
@@ -206,6 +211,8 @@ pub enum WCSCelestialProj {
     Cod(Img2Celestial<Cod, WcsImgXY2ProjXY>),
     Coe(Img2Celestial<Coe, WcsImgXY2ProjXY>),
     Coo(Img2Celestial<Coo, WcsImgXY2ProjXY>),
+    // Hybrid
+    Hpx(Img2Celestial<Hpx, WcsImgXY2ProjXY>),
 
     // SIP handling
     // Zenithal
@@ -234,6 +241,8 @@ pub enum WCSCelestialProj {
     CodSip(Img2Celestial<Cod, WcsWithSipImgXY2ProjXY>),
     CoeSip(Img2Celestial<Coe, WcsWithSipImgXY2ProjXY>),
     CooSip(Img2Celestial<Coo, WcsWithSipImgXY2ProjXY>),
+    // Hybrid
+    HpxSip(Img2Celestial<Hpx, WcsWithSipImgXY2ProjXY>),
 }
 
 fn parse_pc_matrix(header: &Header<Image>) -> Result<Option<(f64, f64, f64, f64)>, Error> {
@@ -243,14 +252,10 @@ fn parse_pc_matrix(header: &Header<Image>) -> Result<Option<(f64, f64, f64, f64)
     let pc22 = header.get_parsed::<f64>(b"PC2_2   ");
 
     let pc_matrix_found = match (&pc11, &pc12, &pc21, &pc22) {
-        (None, None, None, None) => {
-            false
-        },
+        (None, None, None, None) => false,
         // The CD1_1 keyword has been found
-        // We are in a case where the CDij are given 
-        _ => {
-            true
-        }
+        // We are in a case where the CDij are given
+        _ => true,
     };
 
     if pc_matrix_found {
@@ -272,14 +277,10 @@ fn parse_cd_matrix(header: &Header<Image>) -> Result<Option<(f64, f64, f64, f64)
     let cd22 = header.get_parsed::<f64>(b"CD2_2   ");
 
     let cd_matrix_found = match (&cd11, &cd12, &cd21, &cd22) {
-        (None, None, None, None) => {
-            false
-        },
+        (None, None, None, None) => false,
         // The CD1_1 keyword has been found
-        // We are in a case where the CDij are given 
-        _ => {
-            true
-        }
+        // We are in a case where the CDij are given
+        _ => true,
     };
 
     if cd_matrix_found {
@@ -407,20 +408,21 @@ impl WCSProj {
             b"COO" => {
                 create_specific_proj!(Coo, header, ctype1, crpix1, crpix2, img2proj)
             }
+            // HEALPix
+            b"HPX" => {
+                create_specific_proj!(Hpx, header, ctype1, crpix1, crpix2, img2proj)
+            }
             _ => Err(Error::NotImplementedProjection(proj_name.to_string())),
         }?;
 
         let coo_system = CooSystem::parse(&header)?;
 
-        Ok(WCSProj {
-            proj,
-            coo_system
-        })
+        Ok(WCSProj { proj, coo_system })
     }
 
     /// Project a (lon, lat) 3D sphere position to get its corresponding location on the image
     /// The result is given a (X, Y) tuple expressed in pixel coordinates.
-    /// 
+    ///
     /// # Param
     /// * `lonlat`: the 3D sphere vertex expressed as a (lon, lat) tuple given in degrees
     pub fn proj_lonlat(&self, lonlat: &LonLat) -> Option<ImgXY> {
@@ -451,6 +453,8 @@ impl WCSProj {
             WCSCelestialProj::Cod(wcs) => wcs.lonlat2img(lonlat),
             WCSCelestialProj::Coe(wcs) => wcs.lonlat2img(lonlat),
             WCSCelestialProj::Coo(wcs) => wcs.lonlat2img(lonlat),
+            // Hybrid
+            WCSCelestialProj::Hpx(wcs) => wcs.lonlat2img(lonlat),
 
             /* Sip variants */
             // Zenithal
@@ -479,6 +483,8 @@ impl WCSProj {
             WCSCelestialProj::CodSip(wcs) => wcs.lonlat2img(lonlat),
             WCSCelestialProj::CoeSip(wcs) => wcs.lonlat2img(lonlat),
             WCSCelestialProj::CooSip(wcs) => wcs.lonlat2img(lonlat),
+            // Hybrid
+            WCSCelestialProj::HpxSip(wcs) => wcs.lonlat2img(lonlat),
         };
 
         img_xy.map(|xy| ImgXY::new(xy.x() - 1.0, xy.y() - 1.0))
@@ -486,7 +492,7 @@ impl WCSProj {
 
     /// Unproject a (X, Y) point from the image space to get its corresponding location on the sphere
     /// The result is given a (lon, lat) tuple expressed in degrees.
-    /// 
+    ///
     /// # Param
     /// * `img_pos`: the image space point expressed as a (X, Y) tuple given en pixels
     pub fn unproj_lonlat(&self, img_pos: &ImgXY) -> Option<LonLat> {
@@ -518,6 +524,8 @@ impl WCSProj {
             WCSCelestialProj::Cod(wcs) => wcs.img2lonlat(&img_pos),
             WCSCelestialProj::Coe(wcs) => wcs.img2lonlat(&img_pos),
             WCSCelestialProj::Coo(wcs) => wcs.img2lonlat(&img_pos),
+            // Hybrid
+            WCSCelestialProj::Hpx(wcs) => wcs.img2lonlat(&img_pos),
 
             /* Sip variants */
             // Zenithal
@@ -546,6 +554,8 @@ impl WCSProj {
             WCSCelestialProj::CodSip(wcs) => wcs.img2lonlat(&img_pos),
             WCSCelestialProj::CoeSip(wcs) => wcs.img2lonlat(&img_pos),
             WCSCelestialProj::CooSip(wcs) => wcs.img2lonlat(&img_pos),
+            // Hybrid
+            WCSCelestialProj::HpxSip(wcs) => wcs.img2lonlat(&img_pos),
         }
     }
 
@@ -561,11 +571,8 @@ mod tests {
     use crate::mapproj::Projection;
     use fitsrs::fits::Fits;
     use fitsrs::hdu::{
-        header::{
-            extension::image::Image,
-            Header,
-        },
-        data::iter
+        data::iter,
+        header::{extension::image::Image, Header},
     };
     use glob::glob;
     use mapproj::{CanonicalProjection, ImgXY, LonLat};
@@ -578,7 +585,7 @@ mod tests {
         let f = File::open("examples/panstarrs-rotated-around-orion.fits").unwrap();
 
         let mut reader = BufReader::new(f);
-        let Fits { mut hdu} = Fits::from_reader(&mut reader).unwrap();
+        let Fits { mut hdu } = Fits::from_reader(&mut reader).unwrap();
 
         // Parse data
         let data = match hdu.get_data_mut() {
@@ -612,6 +619,8 @@ mod tests {
         reproject_fits_image(mapproj::conic::cop::Cop::new(), &wcs, &header, &data);
         reproject_fits_image(mapproj::conic::coo::Coo::new(), &wcs, &header, &data);
         reproject_fits_image(mapproj::conic::coe::Coe::new(), &wcs, &header, &data);
+
+        reproject_fits_image(mapproj::hybrid::hpx::Hpx::new(), &wcs, &header, &data);
     }
 
     fn reproject_fits_image<'a, T: CanonicalProjection>(
@@ -729,7 +738,7 @@ mod tests {
             if let Ok(path) = dbg!(entry) {
                 let f = File::open(path).unwrap();
                 let mut reader = BufReader::new(f);
-                let Fits { hdu} = Fits::from_reader(&mut reader).unwrap();
+                let Fits { hdu } = Fits::from_reader(&mut reader).unwrap();
                 let header = hdu.get_header();
                 let crval1 = header
                     .get_parsed::<f64>(b"CRVAL1  ")
@@ -752,7 +761,10 @@ mod tests {
 
                 // crval to crpix
                 let proj_px = wcs
-                    .proj(&LonLat::new(dbg!(crval1).to_radians(), dbg!(crval2).to_radians()))
+                    .proj(&LonLat::new(
+                        dbg!(crval1).to_radians(),
+                        dbg!(crval2).to_radians(),
+                    ))
                     .unwrap();
                 assert_delta!(proj_px.x(), crpix1 - 1.0, 1e-6);
                 assert_delta!(proj_px.y(), crpix2 - 1.0, 1e-6);
@@ -773,7 +785,7 @@ mod tests {
         let f = File::open("examples/SN2923fxjA.fits").unwrap();
 
         let mut reader = BufReader::new(f);
-        let Fits { hdu} = Fits::from_reader(&mut reader).unwrap();
+        let Fits { hdu } = Fits::from_reader(&mut reader).unwrap();
         let header = hdu.get_header();
         assert!(WCS::new(header).is_ok());
     }

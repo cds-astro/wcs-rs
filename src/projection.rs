@@ -7,18 +7,19 @@ use fitsrs::hdu::header::Header;
 use mapproj::{
     conic::{cod::Cod, coe::Coe, coo::Coo, cop::Cop},
     cylindrical::{car::Car, cea::Cea, cyp::Cyp, mer::Mer},
+    hybrid::hpx::Hpx,
     pseudocyl::{ait::Ait, mol::Mol, par::Par, sfl::Sfl},
     zenithal::{
         air::Air,
         arc::Arc,
         azp::Azp,
+        ncp::Ncp,
         sin::{Sin, SinSlant},
         stg::Stg,
         szp::Szp,
         tan::Tan,
         zea::Zea,
         zpn::Zpn,
-        ncp::Ncp,
     },
     CanonicalProjection, CenteredProjection, LonLat,
 };
@@ -324,5 +325,11 @@ impl WCSCanonicalProjection for Coo {
                 "PV_1 = theta_a must be defined as it has no default value",
             ))
         }
+    }
+}
+
+impl WCSCanonicalProjection for Hpx {
+    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
+        Ok(Hpx {})
     }
 }
