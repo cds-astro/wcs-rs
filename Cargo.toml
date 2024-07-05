@@ -1,6 +1,6 @@
 [package]
 name = "wcs"
-version = "0.2.8"
+version = "0.3.0"
 edition = "2021"
 authors = ["Matthieu Baumann <matthieu.baumann@astro.unistra.fr>"]
 description = "Implementation of the FITS World Coordinate System (WCS)"
@@ -19,7 +19,7 @@ exclude = [
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-mapproj = "0.3.0"
+mapproj = { git = "https://github.com/cds-astro/cds-mapproj-rust", branch = "pos-angle" }
 enum_dispatch = "0.3.8"
 fitsrs = "0.2.9"
 quick-error = "2.0.1"

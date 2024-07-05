@@ -30,5 +30,9 @@ quick_error! {
         UnrecognizedRadeSys(radesys: String) {
             display("Unrecognized radesys keyword value: '{}'!", radesys)
         }
+        /// Celestial pole cannot be determined
+        CelestialPoleInvalid {
+            display("Bad combination of CRVAL1, CRVAL2, LONPOLE leading to an invalid celestial pole")
+        }
     }
 }
