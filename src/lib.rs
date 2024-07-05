@@ -333,7 +333,6 @@ impl WCSProj {
 
         // 2. Identify the projection type
         let ctype1 = utils::retrieve_mandatory_parsed_keyword::<String>(header, "CTYPE1  ")?;
-        let _ = utils::retrieve_mandatory_parsed_keyword::<String>(header, "CTYPE2  ")?;
 
         let proj_name = &ctype1[5..=7];
 
@@ -420,12 +419,16 @@ impl WCSProj {
         Ok(WCSProj { proj, coo_system })
     }
 
-    /// Project a (lon, lat) 3D sphere position to get its corresponding location on the image
+    /// Project a (lon, lat) given in ICRS frame to get its corresponding location on the image
+    ///
     /// The result is given a (X, Y) tuple expressed in pixel coordinates.
     ///
-    /// # Param
-    /// * `lonlat`: the 3D sphere vertex expressed as a (lon, lat) tuple given in degrees
+    /// # Arguments
+    ///
+    /// * `lonlat`: a coo expressed as (lon, lat) tuple given in degrees and in ICRS system
     pub fn proj_lonlat(&self, lonlat: &LonLat) -> Option<ImgXY> {
+        let lonlat = &self.coo_system.from_icrs(lonlat.clone());
+
         let img_xy = match &self.proj {
             // Zenithal
             WCSCelestialProj::Azp(wcs) => wcs.lonlat2img(lonlat),
@@ -491,13 +494,15 @@ impl WCSProj {
     }
 
     /// Unproject a (X, Y) point from the image space to get its corresponding location on the sphere
-    /// The result is given a (lon, lat) tuple expressed in degrees.
     ///
-    /// # Param
+    /// The result is (lon, lat) tuple expressed in degrees in ICRS
+    ///
+    /// # Arguments
+    ///
     /// * `img_pos`: the image space point expressed as a (X, Y) tuple given en pixels
     pub fn unproj_lonlat(&self, img_pos: &ImgXY) -> Option<LonLat> {
         let img_pos = ImgXY::new(img_pos.x() + 1.0, img_pos.y() + 1.0);
-        match &self.proj {
+        let lonlat = match &self.proj {
             // Zenithal
             WCSCelestialProj::Azp(wcs) => wcs.img2lonlat(&img_pos),
             WCSCelestialProj::Szp(wcs) => wcs.img2lonlat(&img_pos),
@@ -556,7 +561,9 @@ impl WCSProj {
             WCSCelestialProj::CooSip(wcs) => wcs.img2lonlat(&img_pos),
             // Hybrid
             WCSCelestialProj::HpxSip(wcs) => wcs.img2lonlat(&img_pos),
-        }
+        };
+
+        lonlat.map(|ll| self.coo_system.to_icrs(ll))
     }
 
     /// Getter of the coordinate system
