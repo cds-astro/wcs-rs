@@ -8,11 +8,13 @@ mod error;
 use coo_system::CooSystem;
 use error::Error;
 pub mod coo_system;
+mod params;
 mod projection;
 mod sip;
 mod utils;
 
 use crate::projection::WCSCanonicalProjection;
+use params::WCSParams;
 
 // Imports
 use fitsrs::hdu::header::{extension::image::Image, Header};
@@ -32,12 +34,12 @@ use mapproj::{
 use paste::paste;
 /// macro
 macro_rules! create_specific_proj {
-    ( $proj_name:ident, $header:expr, $ctype1:expr, $crpix1:expr, $crpix2:expr, $img2proj:expr ) => {{
-        let proj = $proj_name::parse_proj(&$header)?;
+    ( $proj_name:ident, $params:expr, $ctype1:expr, $crpix1:expr, $crpix2:expr, $img2proj:expr ) => {{
+        let proj = $proj_name::parse_proj(&$params)?;
 
         let is_sip_found = &$ctype1[($ctype1.len() - 3)..] == "SIP";
         if is_sip_found {
-            let sip = sip::parse_sip($header, $crpix1, $crpix2)?;
+            let sip = sip::parse_sip($params, $crpix1, $crpix2)?;
             let img2proj = WcsWithSipImgXY2ProjXY::new($img2proj, sip);
 
             paste! {
@@ -79,32 +81,22 @@ pub struct WCS {
 /// * The unprojection of a (x, y) tuple given in pixel coordinates onto the sphere.
 ///   Results are given as a (lon, lat) tuple expressed in degrees
 impl WCS {
-    /// Create a WCS from a specific fits header parsed with fitsrs
-    /// # Param
-    /// * `header`: Header unit coming from fitsrs.
-    ///   This contains all the cards of one HDU.
-    pub fn new(header: &Header<Image>) -> Result<Self, Error> {
-        let xtension = header.get_xtension();
+    pub fn new(params: &WCSParams) -> Result<Self, Error> {
+        let proj = WCSProj::new(params)?;
 
-        let naxis1 = dbg!(xtension
-            .get_naxisn(1)
-            .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?);
-        let naxis2 = dbg!(xtension
-            .get_naxisn(2)
-            .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?);
-
-        let proj = WCSProj::new(header)?;
+        let naxis1 = params.naxis1;
+        let naxis2 = params.naxis2;
 
         // Compute the field of view along the naxis1 and naxis2 axis
         let center = proj
-            .unproj_lonlat(&ImgXY::new((*naxis1 as f64) / 2.0, (*naxis2 as f64) / 2.0))
+            .unproj_lonlat(&ImgXY::new((naxis1 as f64) / 2.0, (naxis2 as f64) / 2.0))
             .ok_or(Error::UnprojNotDefined(
-                (*naxis1 as f64) / 2.0,
-                (*naxis2 as f64) / 2.0,
+                (naxis1 as f64) / 2.0,
+                (naxis2 as f64) / 2.0,
             ))?;
 
         let half_fov1 = if let Some(top) =
-            proj.unproj_lonlat(&ImgXY::new((*naxis1 as f64) / 2.0, *naxis2 as f64))
+            proj.unproj_lonlat(&ImgXY::new((naxis1 as f64) / 2.0, naxis2 as f64))
         {
             utils::angular_dist(top.into(), center.clone().into())
         } else {
@@ -112,19 +104,27 @@ impl WCS {
         };
 
         let half_fov2 =
-            if let Some(left) = proj.unproj_lonlat(&ImgXY::new(0.0, (*naxis2 as f64) / 2.0)) {
+            if let Some(left) = proj.unproj_lonlat(&ImgXY::new(0.0, (naxis2 as f64) / 2.0)) {
                 utils::angular_dist(left.into(), center.into())
             } else {
                 180.0_f64.to_radians()
             };
 
         Ok(WCS {
-            naxis1: *naxis1 as u64,
-            naxis2: *naxis2 as u64,
+            naxis1: naxis1 as u64,
+            naxis2: naxis2 as u64,
             fov1: half_fov1 * 2.0,
             fov2: half_fov2 * 2.0,
             proj: proj,
         })
+    }
+    /// Create a WCS from a specific fits header parsed with fitsrs
+    /// # Param
+    /// * `header`: Header unit coming from fitsrs.
+    ///   This contains all the cards of one HDU.
+    pub fn from_fits_header(header: &Header<Image>) -> Result<Self, Error> {
+        let params: WCSParams = header.try_into()?;
+        Self::new(&params)
     }
 
     /// Returns the dimensions of the image given by the NAXIS1 x NAXIS2 keyword
@@ -136,19 +136,21 @@ impl WCS {
         (self.fov1, self.fov2)
     }
 
-    /// Project a (lon, lat) 3D sphere position to get its corresponding location on the image
+    /// Project a (lon, lat) in ICRS
+    ///
     /// The result is given a (X, Y) tuple expressed in pixel coordinates.
     ///
-    /// # Param
+    /// # Arguments
+    ///
     /// * `lonlat`: the 3D sphere vertex expressed as a (lon, lat) tuple given in degrees
     pub fn proj(&self, lonlat: &LonLat) -> Option<ImgXY> {
         self.proj.proj_lonlat(lonlat)
     }
 
-    /// Unproject a (X, Y) point from the image space to get its corresponding location on the sphere
-    /// The result is given a (lon, lat) tuple expressed in degrees.
+    /// Unproject a (X, Y) point to get a position on the sky in ICRS system
     ///
-    /// # Param
+    /// # Arguments
+    ///
     /// * `img_pos`: the image space point expressed as a (X, Y) tuple given en pixels
     pub fn unproj(&self, img_pos: &ImgXY) -> Option<LonLat> {
         self.proj.unproj_lonlat(img_pos)
@@ -245,11 +247,11 @@ pub enum WCSCelestialProj {
     HpxSip(Img2Celestial<Hpx, WcsWithSipImgXY2ProjXY>),
 }
 
-fn parse_pc_matrix(header: &Header<Image>) -> Result<Option<(f64, f64, f64, f64)>, Error> {
-    let pc11 = header.get_parsed::<f64>(b"PC1_1   ");
-    let pc12 = header.get_parsed::<f64>(b"PC1_2   ");
-    let pc21 = header.get_parsed::<f64>(b"PC2_1   ");
-    let pc22 = header.get_parsed::<f64>(b"PC2_2   ");
+fn parse_pc_matrix(params: &WCSParams) -> Option<(f64, f64, f64, f64)> {
+    let pc11 = params.pc1_1;
+    let pc12 = params.pc1_2;
+    let pc21 = params.pc2_1;
+    let pc22 = params.pc2_2;
 
     let pc_matrix_found = match (&pc11, &pc12, &pc21, &pc22) {
         (None, None, None, None) => false,
@@ -259,22 +261,22 @@ fn parse_pc_matrix(header: &Header<Image>) -> Result<Option<(f64, f64, f64, f64)
     };
 
     if pc_matrix_found {
-        let pc11 = pc11.unwrap_or(Ok(1.0))?;
-        let pc12 = pc12.unwrap_or(Ok(0.0))?;
-        let pc21 = pc21.unwrap_or(Ok(0.0))?;
-        let pc22 = pc22.unwrap_or(Ok(1.0))?;
+        let pc11 = pc11.unwrap_or(1.0);
+        let pc12 = pc12.unwrap_or(0.0);
+        let pc21 = pc21.unwrap_or(0.0);
+        let pc22 = pc22.unwrap_or(1.0);
 
-        Ok(Some((pc11, pc12, pc21, pc22)))
+        Some((pc11, pc12, pc21, pc22))
     } else {
-        Ok(None)
+        None
     }
 }
 
-fn parse_cd_matrix(header: &Header<Image>) -> Result<Option<(f64, f64, f64, f64)>, Error> {
-    let cd11 = header.get_parsed::<f64>(b"CD1_1   ");
-    let cd12 = header.get_parsed::<f64>(b"CD1_2   ");
-    let cd21 = header.get_parsed::<f64>(b"CD2_1   ");
-    let cd22 = header.get_parsed::<f64>(b"CD2_2   ");
+fn parse_cd_matrix(params: &WCSParams) -> Option<(f64, f64, f64, f64)> {
+    let cd11 = params.cd1_1;
+    let cd12 = params.cd1_2;
+    let cd21 = params.cd2_1;
+    let cd22 = params.cd2_2;
 
     let cd_matrix_found = match (&cd11, &cd12, &cd21, &cd22) {
         (None, None, None, None) => false,
@@ -284,137 +286,136 @@ fn parse_cd_matrix(header: &Header<Image>) -> Result<Option<(f64, f64, f64, f64)
     };
 
     if cd_matrix_found {
-        let cd11 = cd11.unwrap_or(Ok(1.0))?;
-        let cd12 = cd12.unwrap_or(Ok(0.0))?;
-        let cd21 = cd21.unwrap_or(Ok(0.0))?;
-        let cd22 = cd22.unwrap_or(Ok(1.0))?;
+        let cd11 = cd11.unwrap_or(1.0);
+        let cd12 = cd12.unwrap_or(0.0);
+        let cd21 = cd21.unwrap_or(0.0);
+        let cd22 = cd22.unwrap_or(1.0);
 
-        Ok(Some((cd11, cd12, cd21, cd22)))
+        Some((cd11, cd12, cd21, cd22))
     } else {
-        Ok(None)
+        None
     }
 }
 
 impl WCSProj {
     /// Create a WCS from a specific fits header parsed with fitsrs
     /// # Param
-    /// * `header`: Header unit coming from fitsrs.
+    /// * `params`: Header unit coming from fitsrs.
     ///   This contains all the cards of one HDU.
-    pub fn new(header: &Header<Image>) -> Result<Self, Error> {
+    pub fn new(params: &WCSParams) -> Result<Self, Error> {
         // 1. Identify the image <-> intermediate projection
         // a. Linear transformation matrix cases:
         // - CRPIXi + CDij
         // - CRPIXi + CDELTi + CROTA2
         // - CRPIXi + CDELTi + PCij
-        let crpix1 = header.get_parsed::<f64>(b"CRPIX1  ").unwrap_or(Ok(0.0))?;
-        let crpix2 = header.get_parsed::<f64>(b"CRPIX2  ").unwrap_or(Ok(0.0))?;
+        let crpix1 = params.crpix1.unwrap_or(0.0);
+        let crpix2 = params.crpix2.unwrap_or(0.0);
 
         // Choice of the wcs order:
         // 1 - Priority to define the projection is given to CD
         // 2 - Then, to the couple PC + CDELT
         // 3 - Finally to the old CROTA + CDELT convention
-        let img2proj = if let Some((cd11, cd12, cd21, cd22)) = parse_cd_matrix(header)? {
+        let img2proj = if let Some((cd11, cd12, cd21, cd22)) = parse_cd_matrix(params) {
             // CDij case
             WcsImgXY2ProjXY::from_cd(crpix1, crpix2, cd11, cd12, cd21, cd22)
         } else {
             // Search for CDELTi
-            let cdelt1 = header.get_parsed::<f64>(b"CDELT1  ").unwrap_or(Ok(1.0))?;
-            let cdelt2 = header.get_parsed::<f64>(b"CDELT2  ").unwrap_or(Ok(1.0))?;
+            let cdelt1 = params.cdelt1.unwrap_or(1.0);
+            let cdelt2 = params.cdelt2.unwrap_or(1.0);
 
-            if let Some((pc11, pc12, pc21, pc22)) = parse_pc_matrix(header)? {
+            if let Some((pc11, pc12, pc21, pc22)) = parse_pc_matrix(params) {
                 // CDELTi + PCij case
                 WcsImgXY2ProjXY::from_pc(crpix1, crpix2, pc11, pc12, pc21, pc22, cdelt1, cdelt2)
             } else {
                 // CDELTi + CROTA2 case
-                let crota2 = header.get_parsed::<f64>(b"CROTA2  ").unwrap_or(Ok(0.0))?;
+                let crota2 = params.crota2.unwrap_or(0.0);
                 WcsImgXY2ProjXY::from_cr(crpix1, crpix2, crota2, cdelt1, cdelt2)
             }
         };
 
         // 2. Identify the projection type
-        let ctype1 = utils::retrieve_mandatory_parsed_keyword::<String>(header, "CTYPE1  ")?;
-
+        let ctype1 = &params.ctype1;
         let proj_name = &ctype1[5..=7];
 
         let proj = match proj_name.as_bytes() {
             // Zenithal
             b"AZP" => {
-                create_specific_proj!(Azp, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Azp, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"SZP" => {
-                create_specific_proj!(Szp, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Szp, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"TAN" => {
-                create_specific_proj!(Tan, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Tan, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"STG" => {
-                create_specific_proj!(Stg, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Stg, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"SIN" => {
-                create_specific_proj!(Sin, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Sin, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"ARC" => {
-                create_specific_proj!(Arc, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Arc, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"ZPN" => {
-                create_specific_proj!(Zpn, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Zpn, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"ZEA" => {
-                create_specific_proj!(Zea, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Zea, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"AIR" => {
-                create_specific_proj!(Air, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Air, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"NCP" => {
-                create_specific_proj!(Ncp, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Ncp, params, ctype1, crpix1, crpix2, img2proj)
             }
             // Cylindrical
             b"CYP" => {
-                create_specific_proj!(Cyp, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Cyp, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"CEA" => {
-                create_specific_proj!(Cea, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Cea, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"CAR" => {
-                create_specific_proj!(Car, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Car, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"MER" => {
-                create_specific_proj!(Mer, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Mer, params, ctype1, crpix1, crpix2, img2proj)
             }
             // Pseudo-cylindrical
             b"SFL" => {
-                create_specific_proj!(Sfl, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Sfl, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"PAR" => {
-                create_specific_proj!(Par, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Par, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"MOL" => {
-                create_specific_proj!(Mol, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Mol, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"AIT" => {
-                create_specific_proj!(Ait, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Ait, params, ctype1, crpix1, crpix2, img2proj)
             }
             // Conic
             b"COP" => {
-                create_specific_proj!(Cop, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Cop, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"COD" => {
-                create_specific_proj!(Cod, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Cod, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"COE" => {
-                create_specific_proj!(Coe, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Coe, params, ctype1, crpix1, crpix2, img2proj)
             }
             b"COO" => {
-                create_specific_proj!(Coo, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Coo, params, ctype1, crpix1, crpix2, img2proj)
             }
             // HEALPix
             b"HPX" => {
-                create_specific_proj!(Hpx, header, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Hpx, params, ctype1, crpix1, crpix2, img2proj)
             }
             _ => Err(Error::NotImplementedProjection(proj_name.to_string())),
         }?;
 
-        let coo_system = CooSystem::parse(&header)?;
+        let coo_system = CooSystem::parse(&params)?;
 
         Ok(WCSProj { proj, coo_system })
     }
@@ -601,7 +602,7 @@ mod tests {
         };
 
         let header = hdu.get_header();
-        let wcs = WCS::new(&header).unwrap();
+        let wcs = WCS::from_fits_header(&header).unwrap();
         reproject_fits_image(mapproj::zenithal::azp::Azp::new(), &wcs, &header, &data);
         reproject_fits_image(mapproj::zenithal::szp::Szp::new(), &wcs, &header, &data);
         reproject_fits_image(mapproj::zenithal::tan::Tan::new(), &wcs, &header, &data);
@@ -712,7 +713,7 @@ mod tests {
         let mut reader = BufReader::new(f);
         let Fits { hdu } = Fits::from_reader(&mut reader).unwrap();
         let header = hdu.get_header();
-        let wcs = WCS::new(header).unwrap();
+        let wcs = WCS::from_fits_header(header).unwrap();
 
         use std::fs::File;
         // Build the CSV reader and iterate over each record.
@@ -764,7 +765,7 @@ mod tests {
                     .unwrap_or(Ok(0.0))
                     .unwrap();
 
-                let wcs = WCS::new(&header).unwrap();
+                let wcs = WCS::from_fits_header(&header).unwrap();
 
                 // crval to crpix
                 let proj_px = wcs
@@ -794,6 +795,6 @@ mod tests {
         let mut reader = BufReader::new(f);
         let Fits { hdu } = Fits::from_reader(&mut reader).unwrap();
         let header = hdu.get_header();
-        assert!(WCS::new(header).is_ok());
+        assert!(WCS::from_fits_header(header).is_ok());
     }
 }

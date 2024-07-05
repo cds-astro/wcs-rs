@@ -4,19 +4,17 @@
 //! "The SIP convention for Representing Distortion in FITS Image Headers" by David L. Shupe et al.
 //! in the proceedings of ADASS XIV (2005).
 
-use fitsrs::hdu::header::{
-    Header,
-    extension::image::Image
-};
 use mapproj::sip::{Sip, SipAB, SipCoeff};
 
 use crate::error::Error;
 
+use crate::params::WCSParams;
 use crate::utils::string_to_keyword_type;
 
 /// A method that return sip coefficients
-fn retrieve_sip_coeffs(header: &Header<Image>, id: &'static str) -> Result<Option<SipCoeff>, Error> {
-    let kw_order = format!("{}_ORDER ", id);
+fn retrieve_sip_coeffs(params: &WCSParams, id: &'static str) -> Result<Option<SipCoeff>, Error> {
+    todo!();
+    /*let kw_order = format!("{}_ORDER ", id);
     let kw_order = unsafe { string_to_keyword_type(&kw_order) };
     if let Some(num_order) = header.get_parsed::<i64>(kw_order) {
         let num_order = num_order?;
@@ -36,16 +34,16 @@ fn retrieve_sip_coeffs(header: &Header<Image>, id: &'static str) -> Result<Optio
         Ok(Some(SipCoeff::new(coeffs)))
     } else {
         Ok(None)
-    }
+    }*/
 }
 
-pub fn parse_sip(header: &Header<Image>, crpix1: f64, crpix2: f64) -> Result<Sip, Error> {
+pub fn parse_sip(params: &WCSParams, crpix1: f64, crpix2: f64) -> Result<Sip, Error> {
     // proj SIP coefficients
-    let a_coeffs = retrieve_sip_coeffs(header, "A")?.unwrap_or_else(|| SipCoeff::new(Box::new([])));
-    let b_coeffs = retrieve_sip_coeffs(header, "B")?.unwrap_or_else(|| SipCoeff::new(Box::new([])));
+    let a_coeffs = retrieve_sip_coeffs(params, "A")?.unwrap_or_else(|| SipCoeff::new(Box::new([])));
+    let b_coeffs = retrieve_sip_coeffs(params, "B")?.unwrap_or_else(|| SipCoeff::new(Box::new([])));
 
-    let ap_coeffs = retrieve_sip_coeffs(header, "AP")?;
-    let bp_coeffs = retrieve_sip_coeffs(header, "BP")?;
+    let ap_coeffs = retrieve_sip_coeffs(params, "AP")?;
+    let bp_coeffs = retrieve_sip_coeffs(params, "BP")?;
 
     let ab_proj = SipAB::new(a_coeffs, b_coeffs);
 
@@ -54,11 +52,8 @@ pub fn parse_sip(header: &Header<Image>, crpix1: f64, crpix2: f64) -> Result<Sip
         _ => None,
     };
 
-    let xtension = header.get_xtension();
-    let naxis1 = (*xtension.get_naxisn(1)
-        .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?) as f64;
-    let naxis2 = (*xtension.get_naxisn(2)
-        .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?) as f64;
+    let naxis1 = params.naxis1 as f64;
+    let naxis2 = params.naxis2 as f64;
 
     let u = (-crpix1)..=(naxis1 - crpix1);
     let v = (-crpix2)..=(naxis2 - crpix2);

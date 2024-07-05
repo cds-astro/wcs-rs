@@ -24,9 +24,9 @@ enum_dispatch = "0.3.8"
 fitsrs = "0.2.9"
 quick-error = "2.0.1"
 paste = "1.0.11"
+serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 image = "0.24.5"
 csv = "1.1"
-serde = { version = "1", features = ["derive"] }
 glob = "0.3.0"

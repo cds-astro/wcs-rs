@@ -1,11 +1,10 @@
 use std::f64::consts::PI;
 
-use fitsrs::hdu::header::{extension::image::Image, Header};
 use mapproj::LonLat;
 use mapproj::XYZ;
 
 use crate::error::Error;
-use crate::utils;
+use crate::params::WCSParams;
 
 pub enum RadeSys {
     /// International Celestial Reference System
@@ -21,16 +20,18 @@ pub enum RadeSys {
 }
 
 impl RadeSys {
-    pub fn parse(header: &Header<Image>) -> Result<Self, Error> {
-        let radesys = utils::retrieve_mandatory_parsed_keyword::<String>(header, "RADESYS ")?;
-
-        match radesys.as_str() {
-            "ICRS" => Ok(RadeSys::ICRS),
-            "FK5" => Ok(RadeSys::Fk5),
-            "FK4" => Ok(RadeSys::Fk4),
-            "FK4-NO-E" => Ok(RadeSys::Fk4NoE),
-            "GAPPT" => Ok(RadeSys::GAPPT),
-            _ => Err(Error::UnrecognizedRadeSys(radesys)),
+    pub fn parse(params: &WCSParams) -> Option<Result<Self, Error>> {
+        if let Some(radesys) = &params.radesys {
+            match radesys.as_str() {
+                "ICRS" => Some(Ok(RadeSys::ICRS)),
+                "FK5" => Some(Ok(RadeSys::Fk5)),
+                "FK4" => Some(Ok(RadeSys::Fk4)),
+                "FK4-NO-E" => Some(Ok(RadeSys::Fk4NoE)),
+                "GAPPT" => Some(Ok(RadeSys::GAPPT)),
+                _ => Some(Err(Error::UnrecognizedRadeSys(radesys.to_string()))),
+            }
+        } else {
+            None
         }
     }
 }
@@ -49,15 +50,15 @@ pub enum CooSystem {
 }
 
 impl CooSystem {
-    pub fn parse(header: &Header<Image>) -> Result<Self, Error> {
-        let equinox = utils::retrieve_mandatory_parsed_keyword::<f64>(header, "EQUINOX ");
-        let radesys = RadeSys::parse(header);
+    pub fn parse(params: &WCSParams) -> Result<Self, Error> {
+        let equinox = params.equinox;
+        let radesys = RadeSys::parse(params);
 
-        let coo_system = if let (Ok(radesys), Ok(equinox)) = (radesys, equinox) {
+        let coo_system = if let (Some(Ok(radesys)), Some(equinox)) = (radesys, equinox) {
             // if there is a radesys take it into account
             CooSystem::CUSTOM { radesys, equinox }
         } else {
-            let ctype1 = utils::retrieve_mandatory_parsed_keyword::<String>(header, "CTYPE1  ")?;
+            let ctype1 = &params.ctype1;
 
             match ctype1.as_bytes()[0] {
                 b'G' => CooSystem::GALACTIC,

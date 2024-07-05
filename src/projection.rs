@@ -5,7 +5,6 @@
 
 use std::f64::consts::PI;
 
-use fitsrs::hdu::header::Header;
 use mapproj::{
     conic::{cod::Cod, coe::Coe, coo::Coo, cop::Cop},
     cylindrical::{car::Car, cea::Cea, cyp::Cyp, mer::Mer},
@@ -27,9 +26,9 @@ use mapproj::{
     CanonicalProjection, CenteredProjection, LonLat,
 };
 
-use super::Error;
+use crate::params::WCSParams;
 
-use fitsrs::hdu::header::extension::image::Image;
+use super::Error;
 
 #[derive(PartialEq)]
 pub enum FiducialPoint {
@@ -124,33 +123,25 @@ fn celestial_pole(
 }
 
 pub trait WCSCanonicalProjection: CanonicalProjection {
-    fn parse_proj(header: &Header<Image>) -> Result<CenteredProjection<Self>, Error>
+    fn parse_proj(params: &WCSParams) -> Result<CenteredProjection<Self>, Error>
     where
         Self: Sized,
     {
         // Parse the celestial longitude of the fiducial point
-        let crval1 = header.get_parsed::<f64>(b"CRVAL1  ").unwrap_or(Ok(0.0))?;
+        let crval1 = params.crval1.unwrap_or(0.0);
         // Parse the celestial latitude of the fiducial point
-        let crval2 = header.get_parsed::<f64>(b"CRVAL2  ").unwrap_or(Ok(0.0))?;
+        let crval2 = params.crval2.unwrap_or(0.0);
         let crval: LonLat = LonLat::new(crval1.to_radians(), crval2.to_radians());
 
-        let lonpole = header
-            .get_parsed::<f64>(b"LONPOLE ")
-            .unwrap_or_else(|| Ok(if crval2 >= 0.0 { 0.0 } else { 180.0 }))?;
-        let latpole = header
-            .get_parsed::<f64>(b"LATPOLE ")
-            .unwrap_or_else(|| Ok(90.0))?;
+        let lonpole = params
+            .lonpole
+            .unwrap_or_else(|| if crval2 >= 0.0 { 0.0 } else { 180.0 });
+        let latpole = params.latpole.unwrap_or(90.0);
 
         // Parse the native longitude of the fiducial point
-        let native_fiducial_point = match (
-            header.get_parsed::<f64>(b"PV1_1   "),
-            header.get_parsed::<f64>(b"PV1_2   "),
-        ) {
-            (Some(phi_0), Some(theta_0)) => FiducialPoint::UserSpeficied {
-                phi_0: phi_0?,
-                theta_0: theta_0?,
-            },
-            _ => Self::default_native_fiducial_point(header)?,
+        let native_fiducial_point = match (params.pv1_1, params.pv1_2) {
+            (Some(phi_0), Some(theta_0)) => FiducialPoint::UserSpeficied { phi_0, theta_0 },
+            _ => Self::default_native_fiducial_point(params)?,
         };
 
         let positional_angle = if native_fiducial_point == FiducialPoint::Origin {
@@ -181,7 +172,7 @@ pub trait WCSCanonicalProjection: CanonicalProjection {
             ((pole2np_dist.cos() - c_02p * c_02np) / (s_02p * s_02np)).acos()
         };
 
-        let proj = Self::parse_internal_proj_params(header)?;
+        let proj = Self::parse_internal_proj_params(params)?;
 
         let mut rotated_proj = CenteredProjection::new(proj);
         rotated_proj.set_proj_center_from_lonlat_and_positional_angle(&crval, positional_angle);
@@ -189,145 +180,136 @@ pub trait WCSCanonicalProjection: CanonicalProjection {
         Ok(rotated_proj)
     }
 
-    fn default_native_fiducial_point(header: &Header<Image>) -> Result<FiducialPoint, Error>;
+    fn default_native_fiducial_point(params: &WCSParams) -> Result<FiducialPoint, Error>;
 
-    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error>
+    fn parse_internal_proj_params(params: &WCSParams) -> Result<Self, Error>
     where
         Self: Sized;
 }
 
 // Zenithal projections
 impl WCSCanonicalProjection for Azp {
-    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(params: &WCSParams) -> Result<Self, Error> {
         // mu given in spherical radii, default value: 0.0
-        let mu = header.get_parsed::<f64>(b"PV2_1   ").unwrap_or(Ok(0.0))?;
+        let mu = params.pv2_1.unwrap_or(0.0);
         // gamma given in deg, default value: 0.0
-        let gamma = header.get_parsed::<f64>(b"PV2_2   ").unwrap_or(Ok(0.0))?;
+        let gamma = params.pv2_2.unwrap_or(0.0);
 
         let azp = Azp::from_params(mu, gamma.to_radians());
 
         Ok(azp)
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::NorthPole)
     }
 }
 
 impl WCSCanonicalProjection for Szp {
-    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(params: &WCSParams) -> Result<Self, Error> {
         // mu given in spherical radii, default value: 0.0
-        let mu = header.get_parsed::<f64>(b"PV2_1   ").unwrap_or(Ok(0.0))?;
+        let mu = params.pv2_1.unwrap_or(0.0);
         // phi_c given in deg, default value: 0.0
-        let phi_c = header.get_parsed::<f64>(b"PV2_2   ").unwrap_or(Ok(0.0))?;
+        let phi_c = params.pv2_2.unwrap_or(0.0);
         // theta_c given in deg, default value: 90.0
-        let theta_c = header.get_parsed::<f64>(b"PV2_3   ").unwrap_or(Ok(90.0))?;
+        let theta_c = params.pv2_3.unwrap_or(90.0);
 
         let szp = Szp::from_params(mu, phi_c.to_radians(), theta_c.to_radians());
 
         Ok(szp)
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::NorthPole)
     }
 }
 
 impl WCSCanonicalProjection for Tan {
-    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &WCSParams) -> Result<Self, Error> {
         Ok(Tan::new())
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::NorthPole)
     }
 }
 
 impl WCSCanonicalProjection for Stg {
-    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &WCSParams) -> Result<Self, Error> {
         Ok(Stg::new())
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::NorthPole)
     }
 }
 
 impl WCSCanonicalProjection for Sin {
-    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &WCSParams) -> Result<Self, Error> {
         Ok(Sin::new())
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::NorthPole)
     }
 }
 
 impl WCSCanonicalProjection for SinSlant {
-    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(params: &WCSParams) -> Result<Self, Error> {
         // xi dimensionless, default value: 0.0
-        let xi = header.get_parsed::<f64>(b"PV2_1   ").unwrap_or(Ok(0.0))?;
+        let xi = params.pv2_1.unwrap_or(0.0);
         // eta dimensionless, default value: 0.0
-        let eta = header.get_parsed::<f64>(b"PV2_2   ").unwrap_or(Ok(0.0))?;
+        let eta = params.pv2_2.unwrap_or(0.0);
 
         let sin_slant = SinSlant::new(-xi, eta);
         Ok(sin_slant)
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::NorthPole)
     }
 }
 
 impl WCSCanonicalProjection for Arc {
-    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &WCSParams) -> Result<Self, Error> {
         Ok(Arc::new())
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::NorthPole)
     }
 }
 
 impl WCSCanonicalProjection for Zpn {
-    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(params: &WCSParams) -> Result<Self, Error> {
         let mut coeffs = [
-            b"PV2_0   ",
-            b"PV2_1   ",
-            b"PV2_2   ",
-            b"PV2_3   ",
-            b"PV2_4   ",
-            b"PV2_5   ",
-            b"PV2_6   ",
-            b"PV2_7   ",
-            b"PV2_8   ",
-            b"PV2_9   ",
-            b"PV2_10  ",
-            b"PV2_11  ",
-            b"PV2_12  ",
-            b"PV2_13  ",
-            b"PV2_14  ",
-            b"PV2_15  ",
-            b"PV2_16  ",
-            b"PV2_17  ",
-            b"PV2_18  ",
-            b"PV2_19  ",
-            b"PV2_20  ",
+            params.pv2_0,
+            params.pv2_1,
+            params.pv2_2,
+            params.pv2_3,
+            params.pv2_4,
+            params.pv2_5,
+            params.pv2_6,
+            params.pv2_7,
+            params.pv2_8,
+            params.pv2_9,
+            params.pv2_10,
+            params.pv2_11,
+            params.pv2_12,
+            params.pv2_13,
+            params.pv2_14,
+            params.pv2_15,
+            params.pv2_16,
+            params.pv2_17,
+            params.pv2_18,
+            params.pv2_19,
+            params.pv2_20,
         ]
-        .iter()
+        .into_iter()
         .rev()
-        .map(|key| header.get_parsed::<f64>(key))
-        .skip_while(|value| {
-            if let Some(value) = value {
-                // Skip if the value is not a float
-                value.is_err()
-            } else {
-                // Skip if the key has not been found
-                true
-            }
-        })
-        .map(|value| value.unwrap_or(Ok(0.0)))
-        .collect::<Result<Vec<f64>, _>>()?;
+        .skip_while(|p| p.is_none())
+        .map(|p| p.unwrap_or(0.0))
+        .collect::<Vec<_>>();
 
         coeffs.reverse();
 
@@ -337,147 +319,145 @@ impl WCSCanonicalProjection for Zpn {
         ))
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::NorthPole)
     }
 }
 
 impl WCSCanonicalProjection for Zea {
-    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &WCSParams) -> Result<Self, Error> {
         Ok(Zea::new())
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::NorthPole)
     }
 }
 
 impl WCSCanonicalProjection for Air {
-    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(params: &WCSParams) -> Result<Self, Error> {
         // theta_b in deg, default value: 90.0
-        let theta_b = header.get_parsed::<f64>(b"PV2_1   ").unwrap_or(Ok(90.0))?;
+        let theta_b = params.pv2_1.unwrap_or(90.0);
 
         let airy = Air::from_param(theta_b.to_radians());
         Ok(airy)
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::NorthPole)
     }
 }
 
 impl WCSCanonicalProjection for Ncp {
-    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &WCSParams) -> Result<Self, Error> {
         let ncp = Ncp::new();
         Ok(ncp)
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::NorthPole)
     }
 }
 
 // Cylindrical projections
 impl WCSCanonicalProjection for Cyp {
-    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(params: &WCSParams) -> Result<Self, Error> {
         // mu given in spherical radii, default value: 1.0
-        let mu = header.get_parsed::<f64>(b"PV2_1   ").unwrap_or(Ok(1.0))?;
+        let mu = params.pv2_1.unwrap_or(1.0);
         // lambda given in spherical radii, default value: 1.0
-        let lambda = header.get_parsed::<f64>(b"PV2_2   ").unwrap_or(Ok(1.0))?;
+        let lambda = params.pv2_2.unwrap_or(1.0);
 
         let cyp = Cyp::from_params(mu, lambda);
         Ok(cyp)
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::Origin)
     }
 }
 
 impl WCSCanonicalProjection for Cea {
-    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(params: &WCSParams) -> Result<Self, Error> {
         // lambda given in spherical radii, default value: 1.0
-        let lambda = header.get_parsed::<f64>(b"PV2_1   ").unwrap_or(Ok(1.0))?;
+        let lambda = params.pv2_1.unwrap_or(1.0);
 
         let cea = Cea::from_param(lambda);
         Ok(cea)
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::Origin)
     }
 }
 
 impl WCSCanonicalProjection for Car {
-    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &WCSParams) -> Result<Self, Error> {
         Ok(Car::default())
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::Origin)
     }
 }
 
 impl WCSCanonicalProjection for Mer {
-    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &WCSParams) -> Result<Self, Error> {
         Ok(Mer::default())
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::Origin)
     }
 }
 
 // Pseudo-cylindrical projections
 impl WCSCanonicalProjection for Sfl {
-    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &WCSParams) -> Result<Self, Error> {
         Ok(Sfl::default())
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::Origin)
     }
 }
 
 impl WCSCanonicalProjection for Par {
-    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &WCSParams) -> Result<Self, Error> {
         Ok(Par::default())
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::Origin)
     }
 }
 
 impl WCSCanonicalProjection for Mol {
-    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &WCSParams) -> Result<Self, Error> {
         Ok(Mol::default())
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::Origin)
     }
 }
 
 impl WCSCanonicalProjection for Ait {
-    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &WCSParams) -> Result<Self, Error> {
         Ok(Ait::default())
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::Origin)
     }
 }
 
 // Conic projections
 impl WCSCanonicalProjection for Cop {
-    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(params: &WCSParams) -> Result<Self, Error> {
         // theta_a given in deg, has no default value
-        if let Some(theta_a) = header.get_parsed::<f64>(b"PV2_1   ") {
-            let theta_a = theta_a?;
-
+        if let Some(theta_a) = params.pv2_1 {
             // eta given in deg, default value: 0
-            let eta = header.get_parsed::<f64>(b"PV2_2   ").unwrap_or(Ok(0.0))?;
+            let eta = params.pv2_2.unwrap_or(0.0);
 
             let cop = Cop::from_params(theta_a.to_radians(), eta.to_radians());
             Ok(cop)
@@ -489,10 +469,8 @@ impl WCSCanonicalProjection for Cop {
         }
     }
 
-    fn default_native_fiducial_point(header: &Header<Image>) -> Result<FiducialPoint, Error> {
-        if let Some(theta_a) = header.get_parsed::<f64>(b"PV2_1   ") {
-            let theta_a = theta_a?;
-
+    fn default_native_fiducial_point(params: &WCSParams) -> Result<FiducialPoint, Error> {
+        if let Some(theta_a) = params.pv2_1 {
             Ok(FiducialPoint::UserSpeficied {
                 phi_0: 0.0,
                 theta_0: theta_a,
@@ -507,13 +485,11 @@ impl WCSCanonicalProjection for Cop {
 }
 
 impl WCSCanonicalProjection for Coe {
-    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(params: &WCSParams) -> Result<Self, Error> {
         // theta_a given in deg, has no default value
-        if let Some(theta_a) = header.get_parsed::<f64>(b"PV2_1   ") {
-            let theta_a = theta_a?;
-
+        if let Some(theta_a) = params.pv2_1 {
             // eta given in deg, default value: 0
-            let eta = header.get_parsed::<f64>(b"PV2_2   ").unwrap_or(Ok(0.0))?;
+            let eta = params.pv2_2.unwrap_or(0.0);
 
             let cop = Coe::from_params(theta_a.to_radians(), eta.to_radians());
             Ok(cop)
@@ -525,10 +501,8 @@ impl WCSCanonicalProjection for Coe {
         }
     }
 
-    fn default_native_fiducial_point(header: &Header<Image>) -> Result<FiducialPoint, Error> {
-        if let Some(theta_a) = header.get_parsed::<f64>(b"PV2_1   ") {
-            let theta_a = theta_a?;
-
+    fn default_native_fiducial_point(params: &WCSParams) -> Result<FiducialPoint, Error> {
+        if let Some(theta_a) = params.pv2_1 {
             Ok(FiducialPoint::UserSpeficied {
                 phi_0: 0.0,
                 theta_0: theta_a,
@@ -543,13 +517,11 @@ impl WCSCanonicalProjection for Coe {
 }
 
 impl WCSCanonicalProjection for Cod {
-    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(params: &WCSParams) -> Result<Self, Error> {
         // theta_a given in deg, has no default value
-        if let Some(theta_a) = header.get_parsed::<f64>(b"PV2_1   ") {
-            let theta_a = theta_a?;
-
+        if let Some(theta_a) = params.pv2_1 {
             // eta given in deg, default value: 0
-            let eta = header.get_parsed::<f64>(b"PV2_2   ").unwrap_or(Ok(0.0))?;
+            let eta = params.pv2_2.unwrap_or(0.0);
 
             let cod = Cod::from_params(theta_a.to_radians(), eta.to_radians());
             Ok(cod)
@@ -561,10 +533,8 @@ impl WCSCanonicalProjection for Cod {
         }
     }
 
-    fn default_native_fiducial_point(header: &Header<Image>) -> Result<FiducialPoint, Error> {
-        if let Some(theta_a) = header.get_parsed::<f64>(b"PV2_1   ") {
-            let theta_a = theta_a?;
-
+    fn default_native_fiducial_point(params: &WCSParams) -> Result<FiducialPoint, Error> {
+        if let Some(theta_a) = params.pv2_1 {
             Ok(FiducialPoint::UserSpeficied {
                 phi_0: 0.0,
                 theta_0: theta_a,
@@ -579,13 +549,11 @@ impl WCSCanonicalProjection for Cod {
 }
 
 impl WCSCanonicalProjection for Coo {
-    fn parse_internal_proj_params(header: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(params: &WCSParams) -> Result<Self, Error> {
         // theta_a given in deg, has no default value
-        if let Some(theta_a) = header.get_parsed::<f64>(b"PV2_1   ") {
-            let theta_a = theta_a?;
-
+        if let Some(theta_a) = params.pv2_1 {
             // eta given in deg, default value: 0
-            let eta = header.get_parsed::<f64>(b"PV2_2   ").unwrap_or(Ok(0.0))?;
+            let eta = params.pv2_2.unwrap_or(0.0);
 
             let coo = Coo::from_params(theta_a.to_radians(), eta.to_radians());
             Ok(coo)
@@ -597,10 +565,8 @@ impl WCSCanonicalProjection for Coo {
         }
     }
 
-    fn default_native_fiducial_point(header: &Header<Image>) -> Result<FiducialPoint, Error> {
-        if let Some(theta_a) = header.get_parsed::<f64>(b"PV2_1   ") {
-            let theta_a = theta_a?;
-
+    fn default_native_fiducial_point(params: &WCSParams) -> Result<FiducialPoint, Error> {
+        if let Some(theta_a) = params.pv2_1 {
             Ok(FiducialPoint::UserSpeficied {
                 phi_0: 0.0,
                 theta_0: theta_a,
@@ -615,11 +581,11 @@ impl WCSCanonicalProjection for Coo {
 }
 
 impl WCSCanonicalProjection for Hpx {
-    fn parse_internal_proj_params(_: &Header<Image>) -> Result<Self, Error> {
+    fn parse_internal_proj_params(_: &WCSParams) -> Result<Self, Error> {
         Ok(Hpx {})
     }
 
-    fn default_native_fiducial_point(_: &Header<Image>) -> Result<FiducialPoint, Error> {
+    fn default_native_fiducial_point(_: &WCSParams) -> Result<FiducialPoint, Error> {
         Ok(FiducialPoint::Origin)
     }
 }
