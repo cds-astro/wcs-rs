@@ -707,7 +707,8 @@ mod tests {
     #[test]
     fn astropy_comparison() {
         //let f = File::open("examples/cutout-CDS_P_HST_PHAT_F475W.fits").unwrap();
-        let f = File::open("examples/cutout-CDS_P_PanSTARRS_DR1_g.fits").unwrap();
+        //let f = File::open("examples/cutout-CDS_P_PanSTARRS_DR1_g.fits").unwrap();
+        let f = File::open("examples/cutout-CDS_P_allWISE_W3.fits").unwrap();
         //let f = File::open("examples/FOCx38i0101t_c0f.fits").unwrap();
         //let f = File::open("examples/pc.fits").unwrap();
         let mut reader = BufReader::new(f);
@@ -718,7 +719,9 @@ mod tests {
         use std::fs::File;
         // Build the CSV reader and iterate over each record.
         //let f = File::open("examples/pc.fits.csv").unwrap();
-        let f = File::open("examples/cutout-CDS_P_PanSTARRS_DR1_g.fits.csv").unwrap();
+        //let f = File::open("examples/cutout-CDS_P_PanSTARRS_DR1_g.fits.csv").unwrap();
+        let f = File::open("examples/cutout-CDS_P_allWISE_W3.fits.csv").unwrap();
+
         //let f = File::open("examples/FOCx38i0101t_c0f.fits.csv").unwrap();
         //let f = File::open("examples/cutout-CDS_P_HST_PHAT_F475W.fits.csv").unwrap();
 
@@ -733,7 +736,7 @@ mod tests {
 
             if ra.is_finite() && dec.is_finite() {
                 if let Some(img_xy) = wcs.proj(&LonLat::new(ra, dec)) {
-                    assert_delta!(img_xy.x(), x, 1e-4);
+                    assert_delta!(dbg!(img_xy.x()), dbg!(x), 1e-4);
                     assert_delta!(img_xy.y(), y, 1e-4);
                 }
             }

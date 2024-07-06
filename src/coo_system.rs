@@ -80,7 +80,7 @@ impl CooSystem {
             CooSystem::GALACTIC => {
                 let xyz = lonlat.to_xyz();
                 // ICRS_2_GAL * xyz
-                let rotated_xyz = XYZ::new(
+                let rotated_xyz = XYZ::new_renorming_if_necessary(
                     ICRS_2_GAL[0] * xyz.x() + ICRS_2_GAL[1] * xyz.y() + ICRS_2_GAL[2] * xyz.z(),
                     ICRS_2_GAL[3] * xyz.x() + ICRS_2_GAL[4] * xyz.y() + ICRS_2_GAL[5] * xyz.z(),
                     ICRS_2_GAL[6] * xyz.x() + ICRS_2_GAL[7] * xyz.y() + ICRS_2_GAL[8] * xyz.z(),
@@ -101,8 +101,9 @@ impl CooSystem {
             CooSystem::EQUATORIAL => lonlat,
             CooSystem::GALACTIC => {
                 let xyz = lonlat.to_xyz();
+
                 // ICRS_2_GAL * xyz
-                let rotated_xyz = XYZ::new(
+                let rotated_xyz = XYZ::new_renorming_if_necessary(
                     GAL_2_ICRS[0] * xyz.x() + GAL_2_ICRS[1] * xyz.y() + GAL_2_ICRS[2] * xyz.z(),
                     GAL_2_ICRS[3] * xyz.x() + GAL_2_ICRS[4] * xyz.y() + GAL_2_ICRS[5] * xyz.z(),
                     GAL_2_ICRS[6] * xyz.x() + GAL_2_ICRS[7] * xyz.y() + GAL_2_ICRS[8] * xyz.z(),
@@ -119,27 +120,27 @@ impl CooSystem {
 }
 
 const GAL_2_ICRS: &[f64; 9] = &[
+    -0.0548755604024359,
+    0.4941094279435681,
+    -0.8676661489811610,
+    -0.8734370902479237,
     -0.4448296299195045,
     -0.1980763734646737,
-    -0.873437090247923,
+    -0.4838350155267381,
     0.7469822444763707,
     0.4559837762325372,
-    -0.4838350155267381,
-    0.4941094279435681,
-    -0.867_666_148_981_161,
-    -0.0548755604024359,
 ];
 
 const ICRS_2_GAL: &[f64; 9] = &[
-    -0.4448296299195045,
-    0.7469822444763707,
-    0.4941094279435681,
-    -0.1980763734646737,
-    0.4559837762325372,
-    -0.867_666_148_981_161,
+    -0.0548755604024359,
     -0.873437090247923,
     -0.4838350155267381,
-    -0.0548755604024359,
+    0.4941094279435681,
+    -0.4448296299195045,
+    0.7469822444763707,
+    -0.8676661489811610,
+    -0.1980763734646737,
+    0.4559837762325372,
 ];
 
 use mapproj::CustomFloat;

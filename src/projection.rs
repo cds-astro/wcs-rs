@@ -30,7 +30,7 @@ use crate::params::WCSParams;
 
 use super::Error;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum FiducialPoint {
     /// Fiducial point is the north pole (0, 90deg). This is the default for zenital projections
     NorthPole,
@@ -139,13 +139,13 @@ pub trait WCSCanonicalProjection: CanonicalProjection {
         let latpole = params.latpole.unwrap_or(90.0);
 
         // Parse the native longitude of the fiducial point
-        let native_fiducial_point = match (params.pv1_1, params.pv1_2) {
+        let native_fiducial_point = dbg!(match (params.pv1_1, params.pv1_2) {
             (Some(phi_0), Some(theta_0)) => FiducialPoint::UserSpeficied { phi_0, theta_0 },
             _ => Self::default_native_fiducial_point(params)?,
-        };
+        });
 
-        let positional_angle = if native_fiducial_point == FiducialPoint::Origin {
-            PI - lonpole.to_radians()
+        let positional_angle = if native_fiducial_point == FiducialPoint::NorthPole {
+            -PI + lonpole.to_radians()
         } else {
             let pole = celestial_pole(
                 lonpole.to_radians(),
@@ -176,7 +176,8 @@ pub trait WCSCanonicalProjection: CanonicalProjection {
 
         let mut rotated_proj = CenteredProjection::new(proj);
         rotated_proj.set_proj_center_from_lonlat_and_positional_angle(&crval, positional_angle);
-
+        dbg!(positional_angle.to_degrees());
+        //rotated_proj.set_proj_center_from_lonlat(&crval);
         Ok(rotated_proj)
     }
 
