@@ -19,7 +19,7 @@ exclude = [
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-mapproj = { git = "https://github.com/cds-astro/cds-mapproj-rust", branch = "pos-angle" }
+mapproj = { git = "https://github.com/cds-astro/cds-mapproj-rust", branch = "main" }
 enum_dispatch = "0.3.8"
 fitsrs = "0.2.9"
 quick-error = "2.0.1"

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{error::Error, utils};
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub struct WCSParams {
     /// number of axis

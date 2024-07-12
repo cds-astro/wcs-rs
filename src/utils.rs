@@ -1,7 +1,4 @@
-use fitsrs::hdu::header::{
-    Header,
-    extension::image::Image
-};
+use fitsrs::hdu::header::{extension::image::Image, Header};
 use mapproj::LonLat;
 
 use crate::error::Error;
@@ -24,12 +21,4 @@ where
     } else {
         Err(Error::MandatoryWCSKeywordsMissing(keyword))
     }
-}
-
-pub fn angular_dist(lonlat1: LonLat, lonlat2: LonLat) -> f64 {
-    let abs_diff_lon = (lonlat1.lon() - lonlat2.lon()).abs();
-
-    (lonlat1.lat().sin() * lonlat2.lat().sin()
-        + lonlat1.lat().cos() * lonlat2.lat().cos() * abs_diff_lon.cos())
-    .acos()
 }

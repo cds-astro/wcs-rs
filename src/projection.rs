@@ -44,6 +44,17 @@ pub enum FiducialPoint {
     },
 }
 
+impl FiducialPoint {
+    /// Native latitude of the fiducial point
+    fn theta_0(&self) -> f64 {
+        match self {
+            Self::NorthPole => 90.0,
+            Self::Origin => 0.0,
+            Self::UserSpeficied { theta_0, .. } => *theta_0,
+        }
+    }
+}
+
 /// Compute the celestial pole position
 ///
 /// # Arguments
@@ -77,7 +88,7 @@ fn celestial_pole(
     let (s_d0, c_d0) = delta_0.sin_cos();
 
     let a = c_t0 * c_t0 * s_phi * s_phi;
-    let delta_p = if (a - 1.0).abs() < 1e-8 {
+    let delta_p = if a >= 1.0 {
         if delta_0 == 0.0 {
             // Paper convention 6
             Ok(theta_p)
@@ -123,7 +134,7 @@ fn celestial_pole(
 }
 
 pub trait WCSCanonicalProjection: CanonicalProjection {
-    fn parse_proj(params: &WCSParams) -> Result<CenteredProjection<Self>, Error>
+    fn parse_proj(params: &WCSParams) -> Result<(f64, CenteredProjection<Self>), Error>
     where
         Self: Sized,
     {
@@ -131,21 +142,25 @@ pub trait WCSCanonicalProjection: CanonicalProjection {
         let crval1 = params.crval1.unwrap_or(0.0);
         // Parse the celestial latitude of the fiducial point
         let crval2 = params.crval2.unwrap_or(0.0);
-        let crval: LonLat = LonLat::new(crval1.to_radians(), crval2.to_radians());
-
-        let lonpole = params
-            .lonpole
-            .unwrap_or_else(|| if crval2 >= 0.0 { 0.0 } else { 180.0 });
-        let latpole = params.latpole.unwrap_or(90.0);
+        let crval = LonLat::new(crval1.to_radians(), crval2.to_radians());
 
         // Parse the native longitude of the fiducial point
-        let native_fiducial_point = dbg!(match (params.pv1_1, params.pv1_2) {
+        let native_fiducial_point = match (params.pv1_1, params.pv1_2) {
             (Some(phi_0), Some(theta_0)) => FiducialPoint::UserSpeficied { phi_0, theta_0 },
             _ => Self::default_native_fiducial_point(params)?,
+        };
+
+        let lonpole = params.lonpole.unwrap_or_else(|| {
+            if crval2 >= native_fiducial_point.theta_0() {
+                0.0
+            } else {
+                180.0
+            }
         });
+        let latpole = params.latpole.unwrap_or(90.0);
 
         let positional_angle = if native_fiducial_point == FiducialPoint::NorthPole {
-            -PI + lonpole.to_radians()
+            PI - lonpole.to_radians()
         } else {
             let pole = celestial_pole(
                 lonpole.to_radians(),
@@ -161,24 +176,35 @@ pub trait WCSCanonicalProjection: CanonicalProjection {
             let crval2pole_dist = crval.haversine_dist(&pole);
             let crval2np_dist = crval.haversine_dist(&north_pole);
 
-            let pole2np_dist = pole.haversine_dist(&north_pole);
+            if pole == crval || north_pole == crval {
+                0.0
+            } else {
+                let pole2np_dist = pole.haversine_dist(&north_pole);
 
-            let (s_02p, c_02p) = crval2pole_dist.sin_cos();
-            let (s_02np, c_02np) = crval2np_dist.sin_cos();
+                let (s_02p, c_02p) = crval2pole_dist.sin_cos();
+                let (s_02np, c_02np) = crval2np_dist.sin_cos();
 
-            // A angle of a triangle on a sphere does not exceed PI
-            // Use the law of cosines applied for geodesics on a sphere
-            // https://www.theoremoftheday.org/GeometryAndTrigonometry/SphericalCos/TotDSphericalCos.pdf
-            ((pole2np_dist.cos() - c_02p * c_02np) / (s_02p * s_02np)).acos()
+                // A angle of a triangle on a sphere does not exceed PI
+                // Use the law of cosines applied for geodesics on a sphere
+                // https://www.theoremoftheday.org/GeometryAndTrigonometry/SphericalCos/TotDSphericalCos.pdf
+                //((pole2np_dist.cos() - c_02p * c_02np) / (s_02p * s_02np)).acos()
+                let c = (pole2np_dist.cos() - c_02p * c_02np) / (s_02p * s_02np);
+                if c >= 1.0 {
+                    0.0
+                } else if c <= -1.0 {
+                    PI
+                } else {
+                    c.acos()
+                }
+            }
         };
 
         let proj = Self::parse_internal_proj_params(params)?;
 
         let mut rotated_proj = CenteredProjection::new(proj);
-        rotated_proj.set_proj_center_from_lonlat_and_positional_angle(&crval, positional_angle);
-        dbg!(positional_angle.to_degrees());
+        rotated_proj.set_proj_center_from_lonlat_and_positional_angle(&crval, -positional_angle);
         //rotated_proj.set_proj_center_from_lonlat(&crval);
-        Ok(rotated_proj)
+        Ok((positional_angle, rotated_proj))
     }
 
     fn default_native_fiducial_point(params: &WCSParams) -> Result<FiducialPoint, Error>;

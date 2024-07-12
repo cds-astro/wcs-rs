@@ -6,6 +6,7 @@ use mapproj::XYZ;
 use crate::error::Error;
 use crate::params::WCSParams;
 
+#[derive(Debug)]
 pub enum RadeSys {
     /// International Celestial Reference System
     ICRS,
@@ -36,6 +37,7 @@ impl RadeSys {
     }
 }
 
+#[derive(Debug)]
 pub enum CooSystem {
     /// ICRS/J2000
     EQUATORIAL,
@@ -95,6 +97,26 @@ impl CooSystem {
         }
     }
 
+    pub fn from_icrs_xyz(&self, xyz: XYZ) -> XYZ {
+        match self {
+            CooSystem::EQUATORIAL => xyz,
+            CooSystem::GALACTIC => {
+                // ICRS_2_GAL * xyz
+                let rotated_xyz = XYZ::new_renorming_if_necessary(
+                    ICRS_2_GAL[0] * xyz.x() + ICRS_2_GAL[1] * xyz.y() + ICRS_2_GAL[2] * xyz.z(),
+                    ICRS_2_GAL[3] * xyz.x() + ICRS_2_GAL[4] * xyz.y() + ICRS_2_GAL[5] * xyz.z(),
+                    ICRS_2_GAL[6] * xyz.x() + ICRS_2_GAL[7] * xyz.y() + ICRS_2_GAL[8] * xyz.z(),
+                );
+
+                rotated_xyz
+            }
+            _ => {
+                // todo
+                xyz
+            }
+        }
+    }
+
     /// Convert a lonlat expressed in the self system to the icrs coo system
     pub fn to_icrs(&self, lonlat: LonLat) -> LonLat {
         match self {
@@ -114,6 +136,24 @@ impl CooSystem {
             _ => {
                 // todo
                 lonlat
+            }
+        }
+    }
+
+    pub fn to_icrs_xyz(&self, xyz: XYZ) -> XYZ {
+        match self {
+            CooSystem::EQUATORIAL => xyz,
+            CooSystem::GALACTIC => {
+                // ICRS_2_GAL * xyz
+                XYZ::new_renorming_if_necessary(
+                    GAL_2_ICRS[0] * xyz.x() + GAL_2_ICRS[1] * xyz.y() + GAL_2_ICRS[2] * xyz.z(),
+                    GAL_2_ICRS[3] * xyz.x() + GAL_2_ICRS[4] * xyz.y() + GAL_2_ICRS[5] * xyz.z(),
+                    GAL_2_ICRS[6] * xyz.x() + GAL_2_ICRS[7] * xyz.y() + GAL_2_ICRS[8] * xyz.z(),
+                )
+            }
+            _ => {
+                // todo
+                xyz
             }
         }
     }

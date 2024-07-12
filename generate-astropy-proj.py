@@ -9,6 +9,7 @@ input_files = glob.glob('./examples/*.fits')
 print(input_files)
 
 for filename in input_files:
+    print(filename)
     # Load the FITS hdulist using astropy.io.fits
     hdulist = fits.open(filename)
 
@@ -22,7 +23,7 @@ for filename in input_files:
     X = np.random.random(100) * naxis1
     Y = np.random.random(100) * naxis2
 
-    coord = w.wcs_pix2world(np.vstack((X, Y)).T, 0)
+    coord = w.wcs_pix2world(np.vstack((X, Y)).T, 1)
     ra, dec = ((coord[:, 0] * u.deg).to_value(u.rad), (coord[:, 1] * u.deg).to_value(u.rad))
 
     tab = np.column_stack((ra, dec, X, Y))
