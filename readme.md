@@ -19,7 +19,7 @@ To Do list
 
 * [X] Add conic projections (`COD`, `COE`, `COO`, `COP`)
 * [X] Add cylindrical projections (`CAR`, `CEA`, `CYP`, `MER`)
-* [ ] Add hybrid projection (`HPX`)
+* [X] Add hybrid projection (`HPX`)
 * [X] Add pseudo cylindrical projections (`AIT`, `MOL`, `PAR`, `SFL`)
 * [X] Add zenithal projections (`AIR`, `ARC`, `AZP`, `SIN`, `STG`, `SZP`, `TAN`, `ZEA`, `ZPN`)
 * [ ] Zenithal projections not supported (`FEYE`, `NCP`)
@@ -29,7 +29,7 @@ To Do list
 * [X] Support `CRPIX` + `CD` convention
 * [X] Support `CRPIX` + `PC` + `CDELT` convention
 * [X] Support `CRPIX` + `CROTA` + `CDELT` convention
-* [ ] Add support for LONPOLE?
+* [X] Add support for LONPOLE, (~LATPOLE approx)
 * [X] SIP convention support
 * [ ] SIP not tested
 * [ ] [TPV](https://fits.gsfc.nasa.gov/registry/tpvwcs/tpv.html) World Coordinate System non-standard convention
@@ -83,11 +83,11 @@ fn main() {
     let xy = wcs
         .proj_lonlat(&lonlat)
         .unwrap();
-    assert_delta!(xy.x(), crpix1 - 1.0, 1e-6);
-    assert_delta!(xy.y(), crpix2 - 1.0, 1e-6);
+    assert_delta!(xy.x(), crpix1, 1e-6);
+    assert_delta!(xy.y(), crpix2, 1e-6);
 
     // * The unprojection of (X, Y) = (crpix1, crpix2)
-    let xy = ImgXY::new(crpix1 - 1.0, crpix2 - 1.0);
+    let xy = ImgXY::new(crpix1, crpix2);
     let lonlat = wcs
         .unproj_lonlat(&xy)
         .unwrap();
