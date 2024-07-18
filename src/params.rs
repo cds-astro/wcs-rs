@@ -1,7 +1,14 @@
-use fitsrs::hdu::header::{extension::image::Image, Header};
+use fitsrs::{
+    card::CardValue,
+    hdu::header::{extension::image::Image, Header},
+};
 use serde::{Deserialize, Serialize};
 
-use crate::{error::Error, utils};
+use crate::{
+    coo_system::{self, CooSystem},
+    error::Error,
+    utils,
+};
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
@@ -73,6 +80,19 @@ pub struct WCSParams {
     pub pv2_20: Option<f64>,
 }
 
+impl WCSParams {
+    fn from(
+        sky_center: (f64, f64),
+        image_size: (f64, f64),
+        angular_res: (f64, f64),
+        projection: &str,
+        coo_system: CooSystem,
+        positional_angle: f64,
+    ) -> Self {
+        todo!();
+    }
+}
+
 impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
     type Error = Error;
 
@@ -107,7 +127,21 @@ impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
             crota2: h.get_parsed::<f64>(b"CROTA2  ").transpose()?,
             ctype1: utils::retrieve_mandatory_parsed_keyword(h, "CTYPE1  ")?,
             ctype2: h.get_parsed::<String>(b"CTYPE2  ").transpose()?,
-            equinox: h.get_parsed::<f64>(b"EQUINOX ").transpose()?,
+            equinox: h
+                .get_parsed::<f64>(b"EQUINOX ")
+                .transpose()
+                .unwrap_or_else(|_| {
+                    let s = h
+                        .get_parsed::<String>(b"EQUINOX ")
+                        .transpose()
+                        .unwrap_or_else(|_| None);
+
+                    if let Some(s) = s {
+                        s.parse::<f64>().ok()
+                    } else {
+                        None
+                    }
+                }),
             radesys: h.get_parsed::<String>(b"RADESYS ").transpose()?,
             pv1_0: h.get_parsed::<f64>(b"PV1_0   ").transpose()?,
             pv1_1: h.get_parsed::<f64>(b"PV1_1   ").transpose()?,

@@ -18,13 +18,19 @@ for filename in input_files:
 
     naxis1 = hdulist[0].header.get("NAXIS1")
     naxis2 = hdulist[0].header.get("NAXIS2")
-    
+    naxis3 = hdulist[0].header.get("NAXIS3")
+
     # Get random sky coordinates
     X = np.random.random(100) * naxis1
     Y = np.random.random(100) * naxis2
+    Z = np.random.random(100) * 0
 
-    coord = w.wcs_pix2world(np.vstack((X, Y)).T, 1)
-    ra, dec = ((coord[:, 0] * u.deg).to_value(u.rad), (coord[:, 1] * u.deg).to_value(u.rad))
+    try:
+        coord = w.wcs_pix2world(np.vstack((X, Y)).T, 1)
+        ra, dec = ((coord[:, 0] * u.deg).to_value(u.rad), (coord[:, 1] * u.deg).to_value(u.rad))
+    except:
+        coord = w.wcs_pix2world(np.vstack((X, Y, Z)).T, 1)
+        ra, dec = ((coord[:, 0] * u.deg).to_value(u.rad), (coord[:, 1] * u.deg).to_value(u.rad))
 
     tab = np.column_stack((ra, dec, X, Y))
     np.savetxt(filename + ".csv", tab, delimiter=",")

@@ -136,6 +136,7 @@ impl WCS {
             proj,
         })
     }
+
     /// Create a WCS from a specific fits header parsed with fitsrs
     /// # Param
     /// * `header`: Header unit coming from fitsrs.
@@ -934,8 +935,8 @@ mod tests {
 
                 if ra.is_finite() && dec.is_finite() {
                     if let Some(img_xy) = wcs.proj(&LonLat::new(ra, dec)) {
-                        dbg!(img_xy.x() - x);
-                        dbg!(img_xy.y() - y);
+                        //dbg!(img_xy.x() - x);
+                        //dbg!(img_xy.y() - y);
 
                         assert_delta!(img_xy.x(), x, 1e-4);
                         assert_delta!(img_xy.y(), y, 1e-4);
@@ -983,7 +984,7 @@ mod tests {
                     .unwrap_or(Ok(0.0))
                     .unwrap();
 
-                let wcs = WCS::from_fits_header(&header).unwrap();
+                let wcs = dbg!(WCS::from_fits_header(&header)).unwrap();
 
                 // crval to crpix
                 let proj_px = wcs
