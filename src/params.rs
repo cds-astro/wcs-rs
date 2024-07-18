@@ -10,6 +10,8 @@ use crate::{
     utils,
 };
 
+use paste::paste;
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub struct WCSParams {
@@ -42,6 +44,7 @@ pub struct WCSParams {
     pub ctype1: String,
     pub ctype2: Option<String>,
 
+    pub epoch: Option<f64>, /// deprecated in favor of EQUINOX
     pub equinox: Option<f64>,
     pub radesys: Option<String>,
 
@@ -80,17 +83,98 @@ pub struct WCSParams {
     pub pv2_20: Option<f64>,
 }
 
+
+use std::f64::consts::PI;
+
 impl WCSParams {
-    fn from(
-        sky_center: (f64, f64),
-        image_size: (f64, f64),
+    /// lon and lat in degrees, equivalent to CRVAL1 and CRVAL2
+    /// lon and lat in degrees of the celestial pole
+    /// in pixels
+    /// in deg/px, equivalent to CDELT1 and CDELT2
+    /// projection
+    /// coo system e.g. ICRS, GALACTIC, ..
+    fn from<P: mapproj::Projection>(
+        celestial_ref: (f64, f64),
+        celestial_pole: (f64, f64),
+        pixel_size: (f64, f64),
         angular_res: (f64, f64),
-        projection: &str,
+        proj: &P,
         coo_system: CooSystem,
-        positional_angle: f64,
-    ) -> Self {
+    ) -> Result<Self, Error> {
+        /*let proj_name = proj.short_name();
+
+        let lonpole = match proj_name {
+            "AIT" | "MOL" | "MER" | "CAR" => {
+                
+            }
+            // zenithal
+            "SIN" | "TAN" => {
+                (PI - positional_angle.to_radians()).to_degrees()
+            }
+            // conic
+            "COD" => {
+
+            }
+            // hybrid
+            "HPX" => {}
+            _ => return Error::NotImplementedProjection(proj_name.to_string())
+        }*/
         todo!();
     }
+}
+
+
+macro_rules! generate_wcs_param {
+    ($param:ident, $( $i:literal )+, $t:ty) => {
+        paste! {
+            pub struct WCSa {
+                $(
+                    [<$param $i>]: $t
+                ),*
+            }
+        }
+    }
+}
+
+generate_wcs_param!(A, 10, f64);
+
+
+macro_rules! parse_non_mandatory_card_with_type {
+    ($header:ident, $e:expr, $t:ty) => {
+        {
+            let key = match $e.len() {
+                1 => concat!($e, "       "),
+                2 => concat!($e, "      "),
+                3 => concat!($e, "     "),
+                4 => concat!($e, "    "),
+                5 => concat!($e, "   "),
+                6 => concat!($e, "  "),
+                7 => concat!($e, " "),
+                8 => $e,
+                _ => unreachable!()
+            };
+            let bytes = key.as_bytes().as_ptr() as *const [u8; 8];
+
+            $header.get_parsed::<$t>(unsafe { &*bytes }).transpose()
+        }
+    };
+    ($header:ident, $e:expr, $t:ty, $( $ts:ty ),+) => {
+        match parse_non_mandatory_card_with_type!($header, $e, $t) {
+            Ok(v) => Ok(v),
+            _ => {
+                let value = parse_non_mandatory_card_with_type!($header, $e, $( $ts )*)?;
+
+                if let Some(value) = value {
+                    value.parse::<$t>()
+                        .map(|v| Some(v))
+                        .map_err(|_| Error::CardWrongType($e.to_string(), std::any::type_name::<$t>().to_string()))
+                } else {
+                    // card not found but it is ok as it is not mandatory
+                    Ok(None)
+                }
+            }
+        }
+    };
 }
 
 impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
@@ -107,13 +191,13 @@ impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
             .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?;
 
         Ok(WCSParams {
-            naxis: h.get_parsed::<i64>(b"NAXIS   ").transpose()?,
+            naxis: parse_non_mandatory_card_with_type!(h, "NAXIS", i64)?,
             naxis1,
             naxis2,
-            crpix1: h.get_parsed::<f64>(b"CRPIX1  ").transpose()?,
-            crpix2: h.get_parsed::<f64>(b"CRPIX2  ").transpose()?,
-            crval1: h.get_parsed::<f64>(b"CRVAL1  ").transpose()?,
-            crval2: h.get_parsed::<f64>(b"CRVAL2  ").transpose()?,
+            crpix1: parse_non_mandatory_card_with_type!(h, "CRPIX1", f64)?,
+            crpix2: parse_non_mandatory_card_with_type!(h, "CRPIX2", f64)?,
+            crval1: parse_non_mandatory_card_with_type!(h, "CRVAL1", f64)?,
+            crval2: parse_non_mandatory_card_with_type!(h, "CRVAL2", f64)?,
             cd1_1: h.get_parsed::<f64>(b"CD1_1   ").transpose()?,
             cd1_2: h.get_parsed::<f64>(b"CD1_2   ").transpose()?,
             cd2_1: h.get_parsed::<f64>(b"CD2_1   ").transpose()?,
@@ -127,21 +211,8 @@ impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
             crota2: h.get_parsed::<f64>(b"CROTA2  ").transpose()?,
             ctype1: utils::retrieve_mandatory_parsed_keyword(h, "CTYPE1  ")?,
             ctype2: h.get_parsed::<String>(b"CTYPE2  ").transpose()?,
-            equinox: h
-                .get_parsed::<f64>(b"EQUINOX ")
-                .transpose()
-                .unwrap_or_else(|_| {
-                    let s = h
-                        .get_parsed::<String>(b"EQUINOX ")
-                        .transpose()
-                        .unwrap_or_else(|_| None);
-
-                    if let Some(s) = s {
-                        s.parse::<f64>().ok()
-                    } else {
-                        None
-                    }
-                }),
+            epoch: h.get_parsed::<f64>(b"EPOCH   ").transpose()?,
+            equinox: parse_non_mandatory_card_with_type!(h, "EQUINOX", f64, String)?,
             radesys: h.get_parsed::<String>(b"RADESYS ").transpose()?,
             pv1_0: h.get_parsed::<f64>(b"PV1_0   ").transpose()?,
             pv1_1: h.get_parsed::<f64>(b"PV1_1   ").transpose()?,

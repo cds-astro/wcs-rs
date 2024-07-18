@@ -5,6 +5,10 @@ quick_error! {
             from()
         }
         /// Encountered when parsing the Fits file, returned from fitsrs
+        CardWrongType(key: String, tt: String) {
+            display("{} could not be parsed {}", key, tt)
+        }
+        /// Encountered when parsing the Fits file, returned from fitsrs
         FitsParsing(err: fitsrs::error::Error) {
             from()
             display("{}", err)
