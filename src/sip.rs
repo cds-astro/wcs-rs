@@ -9,46 +9,90 @@ use mapproj::sip::{Sip, SipAB, SipCoeff};
 use crate::error::Error;
 
 use crate::params::WCSParams;
-use crate::utils::string_to_keyword_type;
 
 /// A method that return sip coefficients
-fn retrieve_sip_coeffs(params: &WCSParams, id: &'static str) -> Result<Option<SipCoeff>, Error> {
-    todo!();
-    /*let kw_order = format!("{}_ORDER ", id);
-    let kw_order = unsafe { string_to_keyword_type(&kw_order) };
-    if let Some(num_order) = header.get_parsed::<i64>(kw_order) {
-        let num_order = num_order?;
+macro_rules! combi_sip_coeff {
+    ($params:ident, $id:tt, $( $p_q:literal ),+ ) => {
+        paste! {
+            Ok(vec![
+                $(
+                    $params.[< $id:lower _ $p_q >]
+                ),*
+            ])
+        }
+    };
+}
 
-        let coeffs = (0..=num_order)
-            .flat_map(|i| (0..=num_order).map(move |j| (i, j)))
-            .filter(|(i, j)| i + j <= num_order)
-            .map(|(i, j)| {
-                let kw_coeff_ij = format!("{}_{}_{}   ", id, i, j);
-                let kw_coeff_ij = unsafe { string_to_keyword_type(&kw_coeff_ij) };
+use paste::paste;
 
-                header.get_parsed::<f64>(kw_coeff_ij).unwrap_or(Ok(0.0))
-            })
-            .collect::<Result<Vec<_>, fitsrs::error::Error>>()?
-            .into_boxed_slice();
+macro_rules! build_sip_coeffs {
+    ($params:ident, $id:tt) => {
+        paste! {
+            {
+                let order = $params.[< $id:lower _ order >].unwrap_or(0);
 
-        Ok(Some(SipCoeff::new(coeffs)))
-    } else {
-        Ok(None)
-    }*/
+                let coeffs: Vec<Option<f64>> = match order {
+                    0 => combi_sip_coeff!(
+                        $params,
+                        $id,
+                        0_0
+                    ),
+                    1 => combi_sip_coeff!(
+                        $params,
+                        $id,
+                        0_0, 0_1,
+                        1_0
+                    ),
+                    2 => combi_sip_coeff!(
+                        $params,
+                        $id,
+                        0_0, 0_1, 0_2,
+                        1_0, 1_1,
+                        2_0
+                    ),
+                    3 => combi_sip_coeff!(
+                        $params,
+                        $id,
+                        0_0, 0_1, 0_2, 0_3,
+                        1_0, 1_1, 1_2,
+                        2_0, 2_1,
+                        3_0
+                    ),
+                    4 => todo!(),
+                    5 => todo!(),
+                    6 => todo!(),
+                    _ => Err(crate::error::Error::SIPMaxOrderLimitReached)
+                }?;
+    
+                Ok(
+                    SipCoeff::new(
+                        coeffs.into_iter()
+                            .map(|c| c.unwrap_or(0.0))
+                            .collect::<Vec<_>>()
+                            .into_boxed_slice()
+                    )
+                )
+            }
+        }
+    };
 }
 
 pub fn parse_sip(params: &WCSParams, crpix1: f64, crpix2: f64) -> Result<Sip, Error> {
     // proj SIP coefficients
-    let a_coeffs = retrieve_sip_coeffs(params, "A")?.unwrap_or_else(|| SipCoeff::new(Box::new([])));
-    let b_coeffs = retrieve_sip_coeffs(params, "B")?.unwrap_or_else(|| SipCoeff::new(Box::new([])));
+    let a_coeffs: Result<SipCoeff, Error> = build_sip_coeffs!(params, A);
+    let b_coeffs: Result<SipCoeff, Error> = build_sip_coeffs!(params, B);
 
-    let ap_coeffs = retrieve_sip_coeffs(params, "AP")?;
-    let bp_coeffs = retrieve_sip_coeffs(params, "BP")?;
+    let ab_proj = SipAB::new(a_coeffs?, b_coeffs?);
 
-    let ab_proj = SipAB::new(a_coeffs, b_coeffs);
+    let ab_deproj = match (params.ap_order, params.bp_order) {
+        (Some(_), Some(_)) => {
+            let ap_coeffs: Result<SipCoeff, Error> = build_sip_coeffs!(params, AP);
+            let bp_coeffs: Result<SipCoeff, Error> = build_sip_coeffs!(params, BP);
 
-    let ab_deproj = match (ap_coeffs, bp_coeffs) {
-        (Some(ap_coeffs), Some(bp_coeffs)) => Some(SipAB::new(ap_coeffs, bp_coeffs)),
+            Some(SipAB::new(
+                ap_coeffs?, bp_coeffs?
+            ))
+        },
         _ => None,
     };
 

@@ -38,5 +38,8 @@ quick_error! {
         CelestialPoleInvalid {
             display("Bad combination of CRVAL1, CRVAL2, LONPOLE leading to an invalid celestial pole")
         }
+        SIPMaxOrderLimitReached {
+            display("SIP max order limit reached. 6 is the max order supported")
+        }
     }
 }

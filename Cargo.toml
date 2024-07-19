@@ -26,6 +26,9 @@ quick-error = "2.0.1"
 paste = "1.0.15"
 serde = { version = "1", features = ["derive"] }
 
+[build-dependencies]
+paste = "1.0.15"
+
 [dev-dependencies]
 image = "0.24.5"
 csv = "1.1"

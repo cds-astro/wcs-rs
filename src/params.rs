@@ -15,159 +15,227 @@ use paste::paste;
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub struct WCSParams {
-    /// number of axis
-    pub naxis: Option<i64>,
-    /// size of the first axis
-    pub naxis1: u64,
-    /// size of the second axis
-    pub naxis2: u64,
-    pub crpix1: Option<f64>,
-    pub crpix2: Option<f64>,
-    pub crval1: Option<f64>,
-    pub crval2: Option<f64>,
-    /// rotation in the pixel space
-    pub cd1_1: Option<f64>,
-    pub cd1_2: Option<f64>,
-    pub cd2_1: Option<f64>,
-    pub cd2_2: Option<f64>,
+   pub naxis1 : u64,
+   pub naxis2 : u64,
+   pub ctype1 : String,
+   pub naxis : Option<i64>,
+   pub naxis3 : Option<i64>,
+   pub naxis4 : Option<i64>,
+   pub crpix1 : Option<f64>,
+   pub crpix2 : Option<f64>,
+   pub crpix3 : Option<f64>,
+   pub crval1 : Option<f64>,
+   pub crval2 : Option<f64>,
+   pub crval3 : Option<f64>,
+   pub cd1_1 : Option<f64>,
+   pub cd1_2 : Option<f64>,
+   pub cd1_3 : Option<f64>,
+   pub cd2_1 : Option<f64>,
+   pub cd2_2 : Option<f64>,
+   pub cd2_3 : Option<f64>,
+   pub cd3_1 : Option<f64>,
+   pub cd3_2 : Option<f64>,
+   pub cd3_3 : Option<f64>,
+   pub pc1_1 : Option<f64>,
+   pub pc1_2 : Option<f64>,
+   pub pc1_3 : Option<f64>,
+   pub pc2_1 : Option<f64>,
+   pub pc2_2 : Option<f64>,
+   pub pc2_3 : Option<f64>,
+   pub pc3_1 : Option<f64>,
+   pub pc3_2 : Option<f64>,
+   pub pc3_3 : Option<f64>,
+   pub cdelt1 : Option<f64>,
+   pub cdelt2 : Option<f64>,
+   pub cdelt3 : Option<f64>,
+   pub crota1 : Option<f64>,
+   pub crota2 : Option<f64>,
+   pub crota3 : Option<f64>,
+   pub ctype2 : Option<String>,
+   pub ctype3 : Option<String>,
+   pub pv1_0 : Option<f64>,
+   pub pv1_1 : Option<f64>,
+   pub pv1_2 : Option<f64>,
+   pub pv2_0 : Option<f64>,
+   pub pv2_1 : Option<f64>,
+   pub pv2_2 : Option<f64>,
+   pub pv2_3 : Option<f64>,
+   pub pv2_4 : Option<f64>,
+   pub pv2_5 : Option<f64>,
+   pub pv2_6 : Option<f64>,
+   pub pv2_7 : Option<f64>,
+   pub pv2_8 : Option<f64>,
+   pub pv2_9 : Option<f64>,
+   pub pv2_10 : Option<f64>,
+   pub pv2_11 : Option<f64>,
+   pub pv2_12 : Option<f64>,
+   pub pv2_13 : Option<f64>,
+   pub pv2_14 : Option<f64>,
+   pub pv2_15 : Option<f64>,
+   pub pv2_16 : Option<f64>,
+   pub pv2_17 : Option<f64>,
+   pub pv2_18 : Option<f64>,
+   pub pv2_19 : Option<f64>,
+   pub pv2_20 : Option<f64>,
+   pub epoch : Option<f64>,
+   pub equinox : Option<f64>,
+   pub radesys : Option<String>,
+   pub lonpole : Option<f64>,
+   pub latpole : Option<f64>,
+   pub a_order : Option<i64>,
+   pub a_0_0 : Option<f64>,
+   pub a_0_1 : Option<f64>,
+   pub a_0_2 : Option<f64>,
+   pub a_0_3 : Option<f64>,
+   pub a_0_4 : Option<f64>,
+   pub a_0_5 : Option<f64>,
+   pub a_0_6 : Option<f64>,
+   pub a_1_0 : Option<f64>,
+   pub a_1_1 : Option<f64>,
+   pub a_1_2 : Option<f64>,
+   pub a_1_3 : Option<f64>,
+   pub a_1_4 : Option<f64>,
+   pub a_1_5 : Option<f64>,
+   pub a_2_0 : Option<f64>,
+   pub a_2_1 : Option<f64>,
+   pub a_2_2 : Option<f64>,
+   pub a_2_3 : Option<f64>,
+   pub a_2_4 : Option<f64>,
+   pub a_3_0 : Option<f64>,
+   pub a_3_1 : Option<f64>,
+   pub a_3_2 : Option<f64>,
+   pub a_3_3 : Option<f64>,
+   pub a_4_0 : Option<f64>,
+   pub a_4_1 : Option<f64>,
+   pub a_4_2 : Option<f64>,
+   pub a_5_0 : Option<f64>,
+   pub a_5_1 : Option<f64>,
+   pub a_6_0 : Option<f64>,
+   pub b_order : Option<i64>,
+   pub b_0_0 : Option<f64>,
+   pub b_0_1 : Option<f64>,
+   pub b_0_2 : Option<f64>,
+   pub b_0_3 : Option<f64>,
+   pub b_0_4 : Option<f64>,
+   pub b_0_5 : Option<f64>,
+   pub b_0_6 : Option<f64>,
+   pub b_1_0 : Option<f64>,
+   pub b_1_1 : Option<f64>,
+   pub b_1_2 : Option<f64>,
+   pub b_1_3 : Option<f64>,
+   pub b_1_4 : Option<f64>,
+   pub b_1_5 : Option<f64>,
+   pub b_2_0 : Option<f64>,
+   pub b_2_1 : Option<f64>,
+   pub b_2_2 : Option<f64>,
+   pub b_2_3 : Option<f64>,
+   pub b_2_4 : Option<f64>,
+   pub b_3_0 : Option<f64>,
+   pub b_3_1 : Option<f64>,
+   pub b_3_2 : Option<f64>,
+   pub b_3_3 : Option<f64>,
+   pub b_4_0 : Option<f64>,
+   pub b_4_1 : Option<f64>,
+   pub b_4_2 : Option<f64>,
+   pub b_5_0 : Option<f64>,
+   pub b_5_1 : Option<f64>,
+   pub b_6_0 : Option<f64>,
+   pub ap_order : Option<i64>,
+   pub ap_0_0 : Option<f64>,
+   pub ap_0_1 : Option<f64>,
+   pub ap_0_2 : Option<f64>,
+   pub ap_0_3 : Option<f64>,
+   pub ap_0_4 : Option<f64>,
+   pub ap_0_5 : Option<f64>,
+   pub ap_0_6 : Option<f64>,
+   pub ap_1_0 : Option<f64>,
+   pub ap_1_1 : Option<f64>,
+   pub ap_1_2 : Option<f64>,
+   pub ap_1_3 : Option<f64>,
+   pub ap_1_4 : Option<f64>,
+   pub ap_1_5 : Option<f64>,
+   pub ap_2_0 : Option<f64>,
+   pub ap_2_1 : Option<f64>,
+   pub ap_2_2 : Option<f64>,
+   pub ap_2_3 : Option<f64>,
+   pub ap_2_4 : Option<f64>,
+   pub ap_3_0 : Option<f64>,
+   pub ap_3_1 : Option<f64>,
+   pub ap_3_2 : Option<f64>,
+   pub ap_3_3 : Option<f64>,
+   pub ap_4_0 : Option<f64>,
+   pub ap_4_1 : Option<f64>,
+   pub ap_4_2 : Option<f64>,
+   pub ap_5_0 : Option<f64>,
+   pub ap_5_1 : Option<f64>,
+   pub ap_6_0 : Option<f64>,
+   pub bp_order : Option<i64>,
+   pub bp_0_0 : Option<f64>,
+   pub bp_0_1 : Option<f64>,
+   pub bp_0_2 : Option<f64>,
+   pub bp_0_3 : Option<f64>,
+   pub bp_0_4 : Option<f64>,
+   pub bp_0_5 : Option<f64>,
+   pub bp_0_6 : Option<f64>,
+   pub bp_1_0 : Option<f64>,
+   pub bp_1_1 : Option<f64>,
+   pub bp_1_2 : Option<f64>,
+   pub bp_1_3 : Option<f64>,
+   pub bp_1_4 : Option<f64>,
+   pub bp_1_5 : Option<f64>,
+   pub bp_2_0 : Option<f64>,
+   pub bp_2_1 : Option<f64>,
+   pub bp_2_2 : Option<f64>,
+   pub bp_2_3 : Option<f64>,
+   pub bp_2_4 : Option<f64>,
+   pub bp_3_0 : Option<f64>,
+   pub bp_3_1 : Option<f64>,
+   pub bp_3_2 : Option<f64>,
+   pub bp_3_3 : Option<f64>,
+   pub bp_4_0 : Option<f64>,
+   pub bp_4_1 : Option<f64>,
+   pub bp_4_2 : Option<f64>,
+   pub bp_5_0 : Option<f64>,
+   pub bp_5_1 : Option<f64>,
+   pub bp_6_0 : Option<f64>,
 
-    pub pc1_1: Option<f64>,
-    pub pc1_2: Option<f64>,
-    pub pc2_1: Option<f64>,
-    pub pc2_2: Option<f64>,
-
-    pub cdelt1: Option<f64>,
-    pub cdelt2: Option<f64>,
-
-    pub crota2: Option<f64>,
-
-    pub ctype1: String,
-    pub ctype2: Option<String>,
-
-    pub epoch: Option<f64>, /// deprecated in favor of EQUINOX
-    pub equinox: Option<f64>,
-    pub radesys: Option<String>,
-
-    pub pv1_0: Option<f64>,
-    /// native longitude fiducial point
-    pub pv1_1: Option<f64>,
-    /// native latitude fiducial point
-    pub pv1_2: Option<f64>,
-
-    /// native longitude of the celestial pole
-    pub lonpole: Option<f64>,
-    /// native latitude of the celestial pole
-    pub latpole: Option<f64>,
-
-    /// projections parameters
-    pub pv2_0: Option<f64>,
-    pub pv2_1: Option<f64>,
-    pub pv2_2: Option<f64>,
-    pub pv2_3: Option<f64>,
-    pub pv2_4: Option<f64>,
-    pub pv2_5: Option<f64>,
-    pub pv2_6: Option<f64>,
-    pub pv2_7: Option<f64>,
-    pub pv2_8: Option<f64>,
-    pub pv2_9: Option<f64>,
-    pub pv2_10: Option<f64>,
-    pub pv2_11: Option<f64>,
-    pub pv2_12: Option<f64>,
-    pub pv2_13: Option<f64>,
-    pub pv2_14: Option<f64>,
-    pub pv2_15: Option<f64>,
-    pub pv2_16: Option<f64>,
-    pub pv2_17: Option<f64>,
-    pub pv2_18: Option<f64>,
-    pub pv2_19: Option<f64>,
-    pub pv2_20: Option<f64>,
 }
 
-
-use std::f64::consts::PI;
-
-impl WCSParams {
-    /// lon and lat in degrees, equivalent to CRVAL1 and CRVAL2
-    /// lon and lat in degrees of the celestial pole
-    /// in pixels
-    /// in deg/px, equivalent to CDELT1 and CDELT2
-    /// projection
-    /// coo system e.g. ICRS, GALACTIC, ..
-    fn from<P: mapproj::Projection>(
-        celestial_ref: (f64, f64),
-        celestial_pole: (f64, f64),
-        pixel_size: (f64, f64),
-        angular_res: (f64, f64),
-        proj: &P,
-        coo_system: CooSystem,
-    ) -> Result<Self, Error> {
-        /*let proj_name = proj.short_name();
-
-        let lonpole = match proj_name {
-            "AIT" | "MOL" | "MER" | "CAR" => {
-                
-            }
-            // zenithal
-            "SIN" | "TAN" => {
-                (PI - positional_angle.to_radians()).to_degrees()
-            }
-            // conic
-            "COD" => {
-
-            }
-            // hybrid
-            "HPX" => {}
-            _ => return Error::NotImplementedProjection(proj_name.to_string())
-        }*/
-        todo!();
-    }
-}
-
-
-macro_rules! generate_wcs_param {
-    ($param:ident, $( $i:literal )+, $t:ty) => {
-        paste! {
-            pub struct WCSa {
-                $(
-                    [<$param $i>]: $t
-                ),*
-            }
-        }
-    }
-}
-
-generate_wcs_param!(A, 10, f64);
-
-
-macro_rules! parse_non_mandatory_card_with_type {
-    ($header:ident, $e:expr, $t:ty) => {
+macro_rules! try_parse_card_from_header {
+    ( $header:ident, $key:tt, $type:ty ) => {
         {
-            let key = match $e.len() {
-                1 => concat!($e, "       "),
-                2 => concat!($e, "      "),
-                3 => concat!($e, "     "),
-                4 => concat!($e, "    "),
-                5 => concat!($e, "   "),
-                6 => concat!($e, "  "),
-                7 => concat!($e, " "),
-                8 => $e,
+            let a = match stringify!($key).len() {
+                1 => concat!(stringify!($key), "       "),
+                2 => concat!(stringify!($key), "      "),
+                3 => concat!(stringify!($key), "     "),
+                4 => concat!(stringify!($key), "    "),
+                5 => concat!(stringify!($key), "   "),
+                6 => concat!(stringify!($key), "  "),
+                7 => concat!(stringify!($key), " "),
+                8 => stringify!($key),
                 _ => unreachable!()
             };
-            let bytes = key.as_bytes().as_ptr() as *const [u8; 8];
-
-            $header.get_parsed::<$t>(unsafe { &*bytes }).transpose()
+            let bytes = dbg!(a).as_bytes().as_ptr() as *const [u8; 8];
+        
+            dbg!($header.get_parsed::<$type>(unsafe { dbg!(&*bytes) })).transpose()
         }
     };
-    ($header:ident, $e:expr, $t:ty, $( $ts:ty ),+) => {
-        match parse_non_mandatory_card_with_type!($header, $e, $t) {
+}
+ 
+macro_rules! parse_optional_card_with_type {
+    ($header:ident, $key:tt, $type:ty) => {
+        try_parse_card_from_header!($header, $key, $type)
+    };
+    ($header:ident, $key:tt, $type:ty, $( $ts:ty ),*) => {
+        match parse_optional_card_with_type!($header, $key, $type) {
             Ok(v) => Ok(v),
             _ => {
-                let value = parse_non_mandatory_card_with_type!($header, $e, $( $ts )*)?;
+                let value = parse_optional_card_with_type!($header, $key, $( $ts )*)?;
 
                 if let Some(value) = value {
-                    value.parse::<$t>()
+                    value.parse::<$type>()
                         .map(|v| Some(v))
-                        .map_err(|_| Error::CardWrongType($e.to_string(), std::any::type_name::<$t>().to_string()))
+                        .map_err(|_| Error::CardWrongType(stringify!($key).to_string(), std::any::type_name::<$type>().to_string()))
                 } else {
                     // card not found but it is ok as it is not mandatory
                     Ok(None)
@@ -177,10 +245,28 @@ macro_rules! parse_non_mandatory_card_with_type {
     };
 }
 
+macro_rules! parse_mandatory_card_with_type {
+    ($header:ident, $key:tt, $type:ty) => {
+        match try_parse_card_from_header!($header, $key, $type) {
+            // No parsing error and found
+            Ok(Some(v)) => {
+                Ok(v)
+            },
+            // No error but not found, we return an error
+            Ok(None) => Err(Error::MandatoryWCSKeywordsMissing(stringify!($key))),
+            // Return the parsing error
+            Err(e) => {
+                Err(e.into())
+            }
+        }
+    };
+}
+
 impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
     type Error = Error;
 
     fn try_from(h: &'a Header<Image>) -> Result<Self, Self::Error> {
+
         let xtension = h.get_xtension();
 
         let naxis1 = *xtension
@@ -189,57 +275,189 @@ impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
         let naxis2 = *xtension
             .get_naxisn(2)
             .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?;
-
         Ok(WCSParams {
-            naxis: parse_non_mandatory_card_with_type!(h, "NAXIS", i64)?,
-            naxis1,
-            naxis2,
-            crpix1: parse_non_mandatory_card_with_type!(h, "CRPIX1", f64)?,
-            crpix2: parse_non_mandatory_card_with_type!(h, "CRPIX2", f64)?,
-            crval1: parse_non_mandatory_card_with_type!(h, "CRVAL1", f64)?,
-            crval2: parse_non_mandatory_card_with_type!(h, "CRVAL2", f64)?,
-            cd1_1: h.get_parsed::<f64>(b"CD1_1   ").transpose()?,
-            cd1_2: h.get_parsed::<f64>(b"CD1_2   ").transpose()?,
-            cd2_1: h.get_parsed::<f64>(b"CD2_1   ").transpose()?,
-            cd2_2: h.get_parsed::<f64>(b"CD2_2   ").transpose()?,
-            pc1_1: h.get_parsed::<f64>(b"PC1_1   ").transpose()?,
-            pc1_2: h.get_parsed::<f64>(b"PC1_2   ").transpose()?,
-            pc2_1: h.get_parsed::<f64>(b"PC2_1   ").transpose()?,
-            pc2_2: h.get_parsed::<f64>(b"PC2_2   ").transpose()?,
-            cdelt1: h.get_parsed::<f64>(b"CDELT1  ").transpose()?,
-            cdelt2: h.get_parsed::<f64>(b"CDELT2  ").transpose()?,
-            crota2: h.get_parsed::<f64>(b"CROTA2  ").transpose()?,
-            ctype1: utils::retrieve_mandatory_parsed_keyword(h, "CTYPE1  ")?,
-            ctype2: h.get_parsed::<String>(b"CTYPE2  ").transpose()?,
-            epoch: h.get_parsed::<f64>(b"EPOCH   ").transpose()?,
-            equinox: parse_non_mandatory_card_with_type!(h, "EQUINOX", f64, String)?,
-            radesys: h.get_parsed::<String>(b"RADESYS ").transpose()?,
-            pv1_0: h.get_parsed::<f64>(b"PV1_0   ").transpose()?,
-            pv1_1: h.get_parsed::<f64>(b"PV1_1   ").transpose()?,
-            pv1_2: h.get_parsed::<f64>(b"PV1_2   ").transpose()?,
-            lonpole: h.get_parsed::<f64>(b"LONPOLE ").transpose()?,
-            latpole: h.get_parsed::<f64>(b"LATPOLE ").transpose()?,
-            pv2_0: h.get_parsed::<f64>(b"PV2_0   ").transpose()?,
-            pv2_1: h.get_parsed::<f64>(b"PV2_1   ").transpose()?,
-            pv2_2: h.get_parsed::<f64>(b"PV2_2   ").transpose()?,
-            pv2_3: h.get_parsed::<f64>(b"PV2_3   ").transpose()?,
-            pv2_4: h.get_parsed::<f64>(b"PV2_4   ").transpose()?,
-            pv2_5: h.get_parsed::<f64>(b"PV2_5   ").transpose()?,
-            pv2_6: h.get_parsed::<f64>(b"PV2_6   ").transpose()?,
-            pv2_7: h.get_parsed::<f64>(b"PV2_7   ").transpose()?,
-            pv2_8: h.get_parsed::<f64>(b"PV2_8   ").transpose()?,
-            pv2_9: h.get_parsed::<f64>(b"PV2_9   ").transpose()?,
-            pv2_10: h.get_parsed::<f64>(b"PV2_10  ").transpose()?,
-            pv2_11: h.get_parsed::<f64>(b"PV2_11  ").transpose()?,
-            pv2_12: h.get_parsed::<f64>(b"PV2_12  ").transpose()?,
-            pv2_13: h.get_parsed::<f64>(b"PV2_13  ").transpose()?,
-            pv2_14: h.get_parsed::<f64>(b"PV2_14  ").transpose()?,
-            pv2_15: h.get_parsed::<f64>(b"PV2_15  ").transpose()?,
-            pv2_16: h.get_parsed::<f64>(b"PV2_16  ").transpose()?,
-            pv2_17: h.get_parsed::<f64>(b"PV2_17  ").transpose()?,
-            pv2_18: h.get_parsed::<f64>(b"PV2_18  ").transpose()?,
-            pv2_19: h.get_parsed::<f64>(b"PV2_19  ").transpose()?,
-            pv2_20: h.get_parsed::<f64>(b"PV2_20  ").transpose()?,
+            naxis1, naxis2,           ctype1: parse_mandatory_card_with_type!(h, CTYPE1, String)?,
+           ctype2: parse_optional_card_with_type!(h, CTYPE2, String)?,
+           ctype3: parse_optional_card_with_type!(h, CTYPE3, String)?,
+           naxis: parse_optional_card_with_type!(h, NAXIS, i64)?,
+           a_order: parse_optional_card_with_type!(h, A_ORDER, i64)?,
+           b_order: parse_optional_card_with_type!(h, B_ORDER, i64)?,
+           ap_order: parse_optional_card_with_type!(h, AP_ORDER, i64)?,
+           bp_order: parse_optional_card_with_type!(h, BP_ORDER, i64)?,
+           crpix1: parse_optional_card_with_type!(h, CRPIX1, f64)?,
+           crpix2: parse_optional_card_with_type!(h, CRPIX2, f64)?,
+           crpix3: parse_optional_card_with_type!(h, CRPIX3, f64)?,
+           crval1: parse_optional_card_with_type!(h, CRVAL1, f64)?,
+           crval2: parse_optional_card_with_type!(h, CRVAL2, f64)?,
+           crval3: parse_optional_card_with_type!(h, CRVAL3, f64)?,
+           crota1: parse_optional_card_with_type!(h, CROTA1, f64)?,
+           crota2: parse_optional_card_with_type!(h, CROTA2, f64)?,
+           crota3: parse_optional_card_with_type!(h, CROTA3, f64)?,
+           cdelt1: parse_optional_card_with_type!(h, CDELT1, f64)?,
+           cdelt2: parse_optional_card_with_type!(h, CDELT2, f64)?,
+           cdelt3: parse_optional_card_with_type!(h, CDELT3, f64)?,
+           naxis3: parse_optional_card_with_type!(h, NAXIS3, i64)?,
+           naxis4: parse_optional_card_with_type!(h, NAXIS4, i64)?,
+           lonpole: parse_optional_card_with_type!(h, LONPOLE, f64)?,
+           latpole: parse_optional_card_with_type!(h, LATPOLE, f64)?,
+           equinox: parse_optional_card_with_type!(h, EQUINOX, f64, String)?,
+           epoch: parse_optional_card_with_type!(h, EPOCH, f64)?,
+           radesys: parse_optional_card_with_type!(h, RADESYS, String)?,
+           pv1_0: parse_optional_card_with_type!(h, PV1_0, f64)?,
+           pv1_1: parse_optional_card_with_type!(h, PV1_1, f64)?,
+           pv1_2: parse_optional_card_with_type!(h, PV1_2, f64)?,
+           pv2_0: parse_optional_card_with_type!(h, PV2_0, f64)?,
+           pv2_1: parse_optional_card_with_type!(h, PV2_1, f64)?,
+           pv2_2: parse_optional_card_with_type!(h, PV2_2, f64)?,
+           pv2_3: parse_optional_card_with_type!(h, PV2_3, f64)?,
+           pv2_4: parse_optional_card_with_type!(h, PV2_4, f64)?,
+           pv2_5: parse_optional_card_with_type!(h, PV2_5, f64)?,
+           pv2_6: parse_optional_card_with_type!(h, PV2_6, f64)?,
+           pv2_7: parse_optional_card_with_type!(h, PV2_7, f64)?,
+           pv2_8: parse_optional_card_with_type!(h, PV2_8, f64)?,
+           pv2_9: parse_optional_card_with_type!(h, PV2_9, f64)?,
+           pv2_10: parse_optional_card_with_type!(h, PV2_10, f64)?,
+           pv2_11: parse_optional_card_with_type!(h, PV2_11, f64)?,
+           pv2_12: parse_optional_card_with_type!(h, PV2_12, f64)?,
+           pv2_13: parse_optional_card_with_type!(h, PV2_13, f64)?,
+           pv2_14: parse_optional_card_with_type!(h, PV2_14, f64)?,
+           pv2_15: parse_optional_card_with_type!(h, PV2_15, f64)?,
+           pv2_16: parse_optional_card_with_type!(h, PV2_16, f64)?,
+           pv2_17: parse_optional_card_with_type!(h, PV2_17, f64)?,
+           pv2_18: parse_optional_card_with_type!(h, PV2_18, f64)?,
+           pv2_19: parse_optional_card_with_type!(h, PV2_19, f64)?,
+           pv2_20: parse_optional_card_with_type!(h, PV2_20, f64)?,
+           cd1_1: parse_optional_card_with_type!(h, CD1_1, f64)?,
+           cd1_2: parse_optional_card_with_type!(h, CD1_2, f64)?,
+           cd1_3: parse_optional_card_with_type!(h, CD1_3, f64)?,
+           cd2_1: parse_optional_card_with_type!(h, CD2_1, f64)?,
+           cd2_2: parse_optional_card_with_type!(h, CD2_2, f64)?,
+           cd2_3: parse_optional_card_with_type!(h, CD2_3, f64)?,
+           cd3_1: parse_optional_card_with_type!(h, CD3_1, f64)?,
+           cd3_2: parse_optional_card_with_type!(h, CD3_2, f64)?,
+           cd3_3: parse_optional_card_with_type!(h, CD3_3, f64)?,
+           pc1_1: parse_optional_card_with_type!(h, PC1_1, f64)?,
+           pc1_2: parse_optional_card_with_type!(h, PC1_2, f64)?,
+           pc1_3: parse_optional_card_with_type!(h, PC1_3, f64)?,
+           pc2_1: parse_optional_card_with_type!(h, PC2_1, f64)?,
+           pc2_2: parse_optional_card_with_type!(h, PC2_2, f64)?,
+           pc2_3: parse_optional_card_with_type!(h, PC2_3, f64)?,
+           pc3_1: parse_optional_card_with_type!(h, PC3_1, f64)?,
+           pc3_2: parse_optional_card_with_type!(h, PC3_2, f64)?,
+           pc3_3: parse_optional_card_with_type!(h, PC3_3, f64)?,
+           a_0_0: parse_optional_card_with_type!(h, A_0_0, f64)?,
+           a_1_0: parse_optional_card_with_type!(h, A_1_0, f64)?,
+           a_2_0: parse_optional_card_with_type!(h, A_2_0, f64)?,
+           a_3_0: parse_optional_card_with_type!(h, A_3_0, f64)?,
+           a_4_0: parse_optional_card_with_type!(h, A_4_0, f64)?,
+           a_5_0: parse_optional_card_with_type!(h, A_5_0, f64)?,
+           a_6_0: parse_optional_card_with_type!(h, A_6_0, f64)?,
+           a_0_1: parse_optional_card_with_type!(h, A_0_1, f64)?,
+           a_1_1: parse_optional_card_with_type!(h, A_1_1, f64)?,
+           a_2_1: parse_optional_card_with_type!(h, A_2_1, f64)?,
+           a_3_1: parse_optional_card_with_type!(h, A_3_1, f64)?,
+           a_4_1: parse_optional_card_with_type!(h, A_4_1, f64)?,
+           a_5_1: parse_optional_card_with_type!(h, A_5_1, f64)?,
+           a_0_2: parse_optional_card_with_type!(h, A_0_2, f64)?,
+           a_1_2: parse_optional_card_with_type!(h, A_1_2, f64)?,
+           a_2_2: parse_optional_card_with_type!(h, A_2_2, f64)?,
+           a_3_2: parse_optional_card_with_type!(h, A_3_2, f64)?,
+           a_4_2: parse_optional_card_with_type!(h, A_4_2, f64)?,
+           a_0_3: parse_optional_card_with_type!(h, A_0_3, f64)?,
+           a_1_3: parse_optional_card_with_type!(h, A_1_3, f64)?,
+           a_2_3: parse_optional_card_with_type!(h, A_2_3, f64)?,
+           a_3_3: parse_optional_card_with_type!(h, A_3_3, f64)?,
+           a_0_4: parse_optional_card_with_type!(h, A_0_4, f64)?,
+           a_1_4: parse_optional_card_with_type!(h, A_1_4, f64)?,
+           a_2_4: parse_optional_card_with_type!(h, A_2_4, f64)?,
+           a_0_5: parse_optional_card_with_type!(h, A_0_5, f64)?,
+           a_1_5: parse_optional_card_with_type!(h, A_1_5, f64)?,
+           a_0_6: parse_optional_card_with_type!(h, A_0_6, f64)?,
+           ap_0_0: parse_optional_card_with_type!(h, AP_0_0, f64)?,
+           ap_1_0: parse_optional_card_with_type!(h, AP_1_0, f64)?,
+           ap_2_0: parse_optional_card_with_type!(h, AP_2_0, f64)?,
+           ap_3_0: parse_optional_card_with_type!(h, AP_3_0, f64)?,
+           ap_4_0: parse_optional_card_with_type!(h, AP_4_0, f64)?,
+           ap_5_0: parse_optional_card_with_type!(h, AP_5_0, f64)?,
+           ap_6_0: parse_optional_card_with_type!(h, AP_6_0, f64)?,
+           ap_0_1: parse_optional_card_with_type!(h, AP_0_1, f64)?,
+           ap_1_1: parse_optional_card_with_type!(h, AP_1_1, f64)?,
+           ap_2_1: parse_optional_card_with_type!(h, AP_2_1, f64)?,
+           ap_3_1: parse_optional_card_with_type!(h, AP_3_1, f64)?,
+           ap_4_1: parse_optional_card_with_type!(h, AP_4_1, f64)?,
+           ap_5_1: parse_optional_card_with_type!(h, AP_5_1, f64)?,
+           ap_0_2: parse_optional_card_with_type!(h, AP_0_2, f64)?,
+           ap_1_2: parse_optional_card_with_type!(h, AP_1_2, f64)?,
+           ap_2_2: parse_optional_card_with_type!(h, AP_2_2, f64)?,
+           ap_3_2: parse_optional_card_with_type!(h, AP_3_2, f64)?,
+           ap_4_2: parse_optional_card_with_type!(h, AP_4_2, f64)?,
+           ap_0_3: parse_optional_card_with_type!(h, AP_0_3, f64)?,
+           ap_1_3: parse_optional_card_with_type!(h, AP_1_3, f64)?,
+           ap_2_3: parse_optional_card_with_type!(h, AP_2_3, f64)?,
+           ap_3_3: parse_optional_card_with_type!(h, AP_3_3, f64)?,
+           ap_0_4: parse_optional_card_with_type!(h, AP_0_4, f64)?,
+           ap_1_4: parse_optional_card_with_type!(h, AP_1_4, f64)?,
+           ap_2_4: parse_optional_card_with_type!(h, AP_2_4, f64)?,
+           ap_0_5: parse_optional_card_with_type!(h, AP_0_5, f64)?,
+           ap_1_5: parse_optional_card_with_type!(h, AP_1_5, f64)?,
+           ap_0_6: parse_optional_card_with_type!(h, AP_0_6, f64)?,
+           b_0_0: parse_optional_card_with_type!(h, B_0_0, f64)?,
+           b_1_0: parse_optional_card_with_type!(h, B_1_0, f64)?,
+           b_2_0: parse_optional_card_with_type!(h, B_2_0, f64)?,
+           b_3_0: parse_optional_card_with_type!(h, B_3_0, f64)?,
+           b_4_0: parse_optional_card_with_type!(h, B_4_0, f64)?,
+           b_5_0: parse_optional_card_with_type!(h, B_5_0, f64)?,
+           b_6_0: parse_optional_card_with_type!(h, B_6_0, f64)?,
+           b_0_1: parse_optional_card_with_type!(h, B_0_1, f64)?,
+           b_1_1: parse_optional_card_with_type!(h, B_1_1, f64)?,
+           b_2_1: parse_optional_card_with_type!(h, B_2_1, f64)?,
+           b_3_1: parse_optional_card_with_type!(h, B_3_1, f64)?,
+           b_4_1: parse_optional_card_with_type!(h, B_4_1, f64)?,
+           b_5_1: parse_optional_card_with_type!(h, B_5_1, f64)?,
+           b_0_2: parse_optional_card_with_type!(h, B_0_2, f64)?,
+           b_1_2: parse_optional_card_with_type!(h, B_1_2, f64)?,
+           b_2_2: parse_optional_card_with_type!(h, B_2_2, f64)?,
+           b_3_2: parse_optional_card_with_type!(h, B_3_2, f64)?,
+           b_4_2: parse_optional_card_with_type!(h, B_4_2, f64)?,
+           b_0_3: parse_optional_card_with_type!(h, B_0_3, f64)?,
+           b_1_3: parse_optional_card_with_type!(h, B_1_3, f64)?,
+           b_2_3: parse_optional_card_with_type!(h, B_2_3, f64)?,
+           b_3_3: parse_optional_card_with_type!(h, B_3_3, f64)?,
+           b_0_4: parse_optional_card_with_type!(h, B_0_4, f64)?,
+           b_1_4: parse_optional_card_with_type!(h, B_1_4, f64)?,
+           b_2_4: parse_optional_card_with_type!(h, B_2_4, f64)?,
+           b_0_5: parse_optional_card_with_type!(h, B_0_5, f64)?,
+           b_1_5: parse_optional_card_with_type!(h, B_1_5, f64)?,
+           b_0_6: parse_optional_card_with_type!(h, B_0_6, f64)?,
+           bp_0_0: parse_optional_card_with_type!(h, BP_0_0, f64)?,
+           bp_1_0: parse_optional_card_with_type!(h, BP_1_0, f64)?,
+           bp_2_0: parse_optional_card_with_type!(h, BP_2_0, f64)?,
+           bp_3_0: parse_optional_card_with_type!(h, BP_3_0, f64)?,
+           bp_4_0: parse_optional_card_with_type!(h, BP_4_0, f64)?,
+           bp_5_0: parse_optional_card_with_type!(h, BP_5_0, f64)?,
+           bp_6_0: parse_optional_card_with_type!(h, BP_6_0, f64)?,
+           bp_0_1: parse_optional_card_with_type!(h, BP_0_1, f64)?,
+           bp_1_1: parse_optional_card_with_type!(h, BP_1_1, f64)?,
+           bp_2_1: parse_optional_card_with_type!(h, BP_2_1, f64)?,
+           bp_3_1: parse_optional_card_with_type!(h, BP_3_1, f64)?,
+           bp_4_1: parse_optional_card_with_type!(h, BP_4_1, f64)?,
+           bp_5_1: parse_optional_card_with_type!(h, BP_5_1, f64)?,
+           bp_0_2: parse_optional_card_with_type!(h, BP_0_2, f64)?,
+           bp_1_2: parse_optional_card_with_type!(h, BP_1_2, f64)?,
+           bp_2_2: parse_optional_card_with_type!(h, BP_2_2, f64)?,
+           bp_3_2: parse_optional_card_with_type!(h, BP_3_2, f64)?,
+           bp_4_2: parse_optional_card_with_type!(h, BP_4_2, f64)?,
+           bp_0_3: parse_optional_card_with_type!(h, BP_0_3, f64)?,
+           bp_1_3: parse_optional_card_with_type!(h, BP_1_3, f64)?,
+           bp_2_3: parse_optional_card_with_type!(h, BP_2_3, f64)?,
+           bp_3_3: parse_optional_card_with_type!(h, BP_3_3, f64)?,
+           bp_0_4: parse_optional_card_with_type!(h, BP_0_4, f64)?,
+           bp_1_4: parse_optional_card_with_type!(h, BP_1_4, f64)?,
+           bp_2_4: parse_optional_card_with_type!(h, BP_2_4, f64)?,
+           bp_0_5: parse_optional_card_with_type!(h, BP_0_5, f64)?,
+           bp_1_5: parse_optional_card_with_type!(h, BP_1_5, f64)?,
+           bp_0_6: parse_optional_card_with_type!(h, BP_0_6, f64)?,
+
         })
     }
 }
