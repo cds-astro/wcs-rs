@@ -1,22 +1,17 @@
 use fitsrs::{
-    card::CardValue,
     hdu::header::{extension::image::Image, Header},
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    coo_system::{self, CooSystem},
     error::Error,
-    utils,
 };
-
-use paste::paste;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub struct WCSParams {
-   pub naxis1 : u64,
-   pub naxis2 : u64,
+   pub naxis1 : i64,
+   pub naxis2 : i64,
    pub ctype1 : String,
    pub naxis : Option<i64>,
    pub naxis3 : Option<i64>,
@@ -224,23 +219,26 @@ macro_rules! try_parse_card_from_header {
  
 macro_rules! parse_optional_card_with_type {
     ($header:ident, $key:tt, $type:ty) => {
-        try_parse_card_from_header!($header, $key, $type)
-    };
-    ($header:ident, $key:tt, $type:ty, $( $ts:ty ),*) => {
-        match parse_optional_card_with_type!($header, $key, $type) {
-            Ok(v) => Ok(v),
-            _ => {
-                let value = parse_optional_card_with_type!($header, $key, $( $ts )*)?;
+        {
+            let result: Result<Option<$type>, Error> = match try_parse_card_from_header!($header, $key, $type) {
+                Ok(v) => Ok(v),
+                _ => {
+                    let str = try_parse_card_from_header!($header, $key, String)
+                        .unwrap_or(None);
 
-                if let Some(value) = value {
-                    value.parse::<$type>()
-                        .map(|v| Some(v))
-                        .map_err(|_| Error::CardWrongType(stringify!($key).to_string(), std::any::type_name::<$type>().to_string()))
-                } else {
-                    // card not found but it is ok as it is not mandatory
-                    Ok(None)
+                    Ok(if let Some(ss) = str {
+                        ss.trim().parse::<$type>()
+                            .map(|v| Some(v))
+                            .unwrap_or(None)
+                            //.map_err(|_| Error::CardWrongType(stringify!($key).to_string(), std::any::type_name::<($( $ts ),*)>().to_string()))
+                    } else {
+                        // card not found but it is ok as it is not mandatory
+                        None
+                    })
                 }
-            }
+            };
+
+            result
         }
     };
 }
@@ -266,17 +264,9 @@ impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
     type Error = Error;
 
     fn try_from(h: &'a Header<Image>) -> Result<Self, Self::Error> {
-
-        let xtension = h.get_xtension();
-
-        let naxis1 = *xtension
-            .get_naxisn(1)
-            .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?;
-        let naxis2 = *xtension
-            .get_naxisn(2)
-            .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?;
-        Ok(WCSParams {
-            naxis1, naxis2,           ctype1: parse_mandatory_card_with_type!(h, CTYPE1, String)?,
+        Ok(WCSParams {           naxis1: parse_mandatory_card_with_type!(h, NAXIS1, i64)?,
+           naxis2: parse_mandatory_card_with_type!(h, NAXIS2, i64)?,
+           ctype1: parse_mandatory_card_with_type!(h, CTYPE1, String)?,
            ctype2: parse_optional_card_with_type!(h, CTYPE2, String)?,
            ctype3: parse_optional_card_with_type!(h, CTYPE3, String)?,
            naxis: parse_optional_card_with_type!(h, NAXIS, i64)?,
@@ -300,7 +290,7 @@ impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
            naxis4: parse_optional_card_with_type!(h, NAXIS4, i64)?,
            lonpole: parse_optional_card_with_type!(h, LONPOLE, f64)?,
            latpole: parse_optional_card_with_type!(h, LATPOLE, f64)?,
-           equinox: parse_optional_card_with_type!(h, EQUINOX, f64, String)?,
+           equinox: parse_optional_card_with_type!(h, EQUINOX, f64)?,
            epoch: parse_optional_card_with_type!(h, EPOCH, f64)?,
            radesys: parse_optional_card_with_type!(h, RADESYS, String)?,
            pv1_0: parse_optional_card_with_type!(h, PV1_0, f64)?,

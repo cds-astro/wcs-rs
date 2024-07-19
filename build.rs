@@ -1,4 +1,4 @@
-use std::{error::Error};
+use std::error::Error;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
@@ -16,7 +16,7 @@ macro_rules! declare_card {
                     "\n"
                 ),*
             )
-            
+
         }
     };
 
@@ -51,7 +51,6 @@ macro_rules! declare_card {
     };
 }
 
-
 macro_rules! parse_card {
     (@@ ($header:ident, $key:ident, $optional:ident, ($( $type:ty ),*))) => {
         paste! {
@@ -83,7 +82,7 @@ macro_rules! parse_card {
                     parse_card!(@@ ($header, [<$key $i>], $optional, $type))
                 ),*
             )
-        }  
+        }
     };
 
     (@ ($header:ident, $key:ident, $optional:ident, [($( $i:literal ),*), $j:tt], $type:tt)) => {
@@ -93,7 +92,7 @@ macro_rules! parse_card {
                     parse_card!(@ ($header, [<$key $i _>], $optional, $j, $type))
                 ),*
             )
-        }  
+        }
     };
 
     ($(($header:ident, $key:ident, $optional:ident, $i:tt, $type:tt)),*) => {
@@ -107,27 +106,24 @@ macro_rules! parse_card {
 
 pub fn write(path: PathBuf) -> Result<(), Box<dyn Error>> {
     let mut wcs_params_f = File::create(&path)?;
-    wcs_params_f.write(r#"use fitsrs::{
-    card::CardValue,
+    wcs_params_f.write(
+        r#"use fitsrs::{
     hdu::header::{extension::image::Image, Header},
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    coo_system::{self, CooSystem},
     error::Error,
-    utils,
 };
-
-use paste::paste;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub struct WCSParams {
 "#
-    .as_bytes())?;
+        .as_bytes(),
+    )?;
     // Mandatory keywords: NAXIS1, NAXIS2 and CTYPE1
-    wcs_params_f.write(declare_card!(naxis, (1, 2), u64))?;
+    wcs_params_f.write(declare_card!(naxis, (1, 2), i64))?;
     wcs_params_f.write(declare_card!(ctype1, String))?;
 
     wcs_params_f.write(declare_card!(naxis, Option<i64>))?;
@@ -140,7 +136,11 @@ pub struct WCSParams {
     wcs_params_f.write(declare_card!(crota, (1, 2, 3), Option<f64>))?;
     wcs_params_f.write(declare_card!(ctype, (2, 3), Option<String>))?;
     wcs_params_f.write(declare_card!(pv1_, (0, 1, 2), Option<f64>))?;
-    wcs_params_f.write(declare_card!(pv2_, (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20), Option<f64>))?;
+    wcs_params_f.write(declare_card!(
+        pv2_,
+        (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20),
+        Option<f64>
+    ))?;
     wcs_params_f.write(declare_card!(epoch, Option<f64>))?;
     wcs_params_f.write(declare_card!(equinox, Option<f64>))?;
     wcs_params_f.write(declare_card!(radesys, Option<String>))?;
@@ -151,8 +151,16 @@ pub struct WCSParams {
     // max order 6
     wcs_params_f.write(declare_card!(a_order, Option<i64>))?;
 
-    wcs_params_f.write(declare_card!(a_, (0_0, 0_1, 0_2, 0_3, 0_4, 0_5, 0_6), Option<f64>))?;
-    wcs_params_f.write(declare_card!(a_, (1_0, 1_1, 1_2, 1_3, 1_4, 1_5), Option<f64>))?;
+    wcs_params_f.write(declare_card!(
+        a_,
+        (0_0, 0_1, 0_2, 0_3, 0_4, 0_5, 0_6),
+        Option<f64>
+    ))?;
+    wcs_params_f.write(declare_card!(
+        a_,
+        (1_0, 1_1, 1_2, 1_3, 1_4, 1_5),
+        Option<f64>
+    ))?;
     wcs_params_f.write(declare_card!(a_, (2_0, 2_1, 2_2, 2_3, 2_4), Option<f64>))?;
     wcs_params_f.write(declare_card!(a_, (3_0, 3_1, 3_2, 3_3), Option<f64>))?;
     wcs_params_f.write(declare_card!(a_, (4_0, 4_1, 4_2), Option<f64>))?;
@@ -160,8 +168,16 @@ pub struct WCSParams {
     wcs_params_f.write(declare_card!(a_, (6_0), Option<f64>))?;
 
     wcs_params_f.write(declare_card!(b_order, Option<i64>))?;
-    wcs_params_f.write(declare_card!(b_, (0_0, 0_1, 0_2, 0_3, 0_4, 0_5, 0_6), Option<f64>))?;
-    wcs_params_f.write(declare_card!(b_, (1_0, 1_1, 1_2, 1_3, 1_4, 1_5), Option<f64>))?;
+    wcs_params_f.write(declare_card!(
+        b_,
+        (0_0, 0_1, 0_2, 0_3, 0_4, 0_5, 0_6),
+        Option<f64>
+    ))?;
+    wcs_params_f.write(declare_card!(
+        b_,
+        (1_0, 1_1, 1_2, 1_3, 1_4, 1_5),
+        Option<f64>
+    ))?;
     wcs_params_f.write(declare_card!(b_, (2_0, 2_1, 2_2, 2_3, 2_4), Option<f64>))?;
     wcs_params_f.write(declare_card!(b_, (3_0, 3_1, 3_2, 3_3), Option<f64>))?;
     wcs_params_f.write(declare_card!(b_, (4_0, 4_1, 4_2), Option<f64>))?;
@@ -169,8 +185,16 @@ pub struct WCSParams {
     wcs_params_f.write(declare_card!(b_, (6_0), Option<f64>))?;
 
     wcs_params_f.write(declare_card!(ap_order, Option<i64>))?;
-    wcs_params_f.write(declare_card!(ap_, (0_0, 0_1, 0_2, 0_3, 0_4, 0_5, 0_6), Option<f64>))?;
-    wcs_params_f.write(declare_card!(ap_, (1_0, 1_1, 1_2, 1_3, 1_4, 1_5), Option<f64>))?;
+    wcs_params_f.write(declare_card!(
+        ap_,
+        (0_0, 0_1, 0_2, 0_3, 0_4, 0_5, 0_6),
+        Option<f64>
+    ))?;
+    wcs_params_f.write(declare_card!(
+        ap_,
+        (1_0, 1_1, 1_2, 1_3, 1_4, 1_5),
+        Option<f64>
+    ))?;
     wcs_params_f.write(declare_card!(ap_, (2_0, 2_1, 2_2, 2_3, 2_4), Option<f64>))?;
     wcs_params_f.write(declare_card!(ap_, (3_0, 3_1, 3_2, 3_3), Option<f64>))?;
     wcs_params_f.write(declare_card!(ap_, (4_0, 4_1, 4_2), Option<f64>))?;
@@ -178,8 +202,16 @@ pub struct WCSParams {
     wcs_params_f.write(declare_card!(ap_, (6_0), Option<f64>))?;
 
     wcs_params_f.write(declare_card!(bp_order, Option<i64>))?;
-    wcs_params_f.write(declare_card!(bp_, (0_0, 0_1, 0_2, 0_3, 0_4, 0_5, 0_6), Option<f64>))?;
-    wcs_params_f.write(declare_card!(bp_, (1_0, 1_1, 1_2, 1_3, 1_4, 1_5), Option<f64>))?;
+    wcs_params_f.write(declare_card!(
+        bp_,
+        (0_0, 0_1, 0_2, 0_3, 0_4, 0_5, 0_6),
+        Option<f64>
+    ))?;
+    wcs_params_f.write(declare_card!(
+        bp_,
+        (1_0, 1_1, 1_2, 1_3, 1_4, 1_5),
+        Option<f64>
+    ))?;
     wcs_params_f.write(declare_card!(bp_, (2_0, 2_1, 2_2, 2_3, 2_4), Option<f64>))?;
     wcs_params_f.write(declare_card!(bp_, (3_0, 3_1, 3_2, 3_3), Option<f64>))?;
     wcs_params_f.write(declare_card!(bp_, (4_0, 4_1, 4_2), Option<f64>))?;
@@ -211,23 +243,26 @@ macro_rules! try_parse_card_from_header {
  
 macro_rules! parse_optional_card_with_type {
     ($header:ident, $key:tt, $type:ty) => {
-        try_parse_card_from_header!($header, $key, $type)
-    };
-    ($header:ident, $key:tt, $type:ty, $( $ts:ty ),*) => {
-        match parse_optional_card_with_type!($header, $key, $type) {
-            Ok(v) => Ok(v),
-            _ => {
-                let value = parse_optional_card_with_type!($header, $key, $( $ts )*)?;
+        {
+            let result: Result<Option<$type>, Error> = match try_parse_card_from_header!($header, $key, $type) {
+                Ok(v) => Ok(v),
+                _ => {
+                    let str = try_parse_card_from_header!($header, $key, String)
+                        .unwrap_or(None);
 
-                if let Some(value) = value {
-                    value.parse::<$type>()
-                        .map(|v| Some(v))
-                        .map_err(|_| Error::CardWrongType(stringify!($key).to_string(), std::any::type_name::<$type>().to_string()))
-                } else {
-                    // card not found but it is ok as it is not mandatory
-                    Ok(None)
+                    Ok(if let Some(ss) = str {
+                        ss.trim().parse::<$type>()
+                            .map(|v| Some(v))
+                            .unwrap_or(None)
+                            //.map_err(|_| Error::CardWrongType(stringify!($key).to_string(), std::any::type_name::<($( $ts ),*)>().to_string()))
+                    } else {
+                        // card not found but it is ok as it is not mandatory
+                        None
+                    })
                 }
-            }
+            };
+
+            result
         }
     };
 }
@@ -253,19 +288,10 @@ impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
     type Error = Error;
 
     fn try_from(h: &'a Header<Image>) -> Result<Self, Self::Error> {
-
-        let xtension = h.get_xtension();
-
-        let naxis1 = *xtension
-            .get_naxisn(1)
-            .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?;
-        let naxis2 = *xtension
-            .get_naxisn(2)
-            .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?;
-        Ok(WCSParams {
-            naxis1, naxis2,"#.as_bytes())?;
+        Ok(WCSParams {"#.as_bytes())?;
 
     wcs_params_f.write(parse_card!(
+        (h, NAXIS, mandatory, (1, 2), (i64)),
         (h, CTYPE1, mandatory, (), (String)),
         (h, CTYPE, optional, (2, 3), (String)),
         (h, NAXIS, optional, (), (i64)),
@@ -280,57 +306,69 @@ impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
         (h, NAXIS, optional, (3, 4), (i64)),
         (h, LONPOLE, optional, (), (f64)),
         (h, LATPOLE, optional, (), (f64)),
-        (h, EQUINOX, optional, (), (f64, String)),
+        (h, EQUINOX, optional, (), (f64)),
         (h, EPOCH, optional, (), (f64)),
         (h, RADESYS, optional, (), (String)),
         (h, PV1_, optional, (0, 1, 2), (f64)),
-        (h, PV2_, optional, (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20), (f64)),
+        (
+            h,
+            PV2_,
+            optional,
+            (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20),
+            (f64)
+        ),
         (h, CD, optional, [(1, 2, 3), (1, 2, 3)], (f64)),
         (h, PC, optional, [(1, 2, 3), (1, 2, 3)], (f64)),
-        (h, A_, optional, (
-            0_0, 1_0, 2_0, 3_0, 4_0, 5_0, 6_0,
-            0_1, 1_1, 2_1, 3_1, 4_1, 5_1,
-            0_2, 1_2, 2_2, 3_2, 4_2,
-            0_3, 1_3, 2_3, 3_3,
-            0_4, 1_4, 2_4,
-            0_5, 1_5,
-            0_6
-        ), (f64)),
-        (h, AP_, optional, (
-            0_0, 1_0, 2_0, 3_0, 4_0, 5_0, 6_0,
-            0_1, 1_1, 2_1, 3_1, 4_1, 5_1,
-            0_2, 1_2, 2_2, 3_2, 4_2,
-            0_3, 1_3, 2_3, 3_3,
-            0_4, 1_4, 2_4,
-            0_5, 1_5,
-            0_6
-        ), (f64)),
-        (h, B_, optional, (
-            0_0, 1_0, 2_0, 3_0, 4_0, 5_0, 6_0,
-            0_1, 1_1, 2_1, 3_1, 4_1, 5_1,
-            0_2, 1_2, 2_2, 3_2, 4_2,
-            0_3, 1_3, 2_3, 3_3,
-            0_4, 1_4, 2_4,
-            0_5, 1_5,
-            0_6
-        ), (f64)),
-        (h, BP_, optional, (
-            0_0, 1_0, 2_0, 3_0, 4_0, 5_0, 6_0,
-            0_1, 1_1, 2_1, 3_1, 4_1, 5_1,
-            0_2, 1_2, 2_2, 3_2, 4_2,
-            0_3, 1_3, 2_3, 3_3,
-            0_4, 1_4, 2_4,
-            0_5, 1_5,
-            0_6
-        ), (f64))
+        (
+            h,
+            A_,
+            optional,
+            (
+                0_0, 1_0, 2_0, 3_0, 4_0, 5_0, 6_0, 0_1, 1_1, 2_1, 3_1, 4_1, 5_1, 0_2, 1_2, 2_2,
+                3_2, 4_2, 0_3, 1_3, 2_3, 3_3, 0_4, 1_4, 2_4, 0_5, 1_5, 0_6
+            ),
+            (f64)
+        ),
+        (
+            h,
+            AP_,
+            optional,
+            (
+                0_0, 1_0, 2_0, 3_0, 4_0, 5_0, 6_0, 0_1, 1_1, 2_1, 3_1, 4_1, 5_1, 0_2, 1_2, 2_2,
+                3_2, 4_2, 0_3, 1_3, 2_3, 3_3, 0_4, 1_4, 2_4, 0_5, 1_5, 0_6
+            ),
+            (f64)
+        ),
+        (
+            h,
+            B_,
+            optional,
+            (
+                0_0, 1_0, 2_0, 3_0, 4_0, 5_0, 6_0, 0_1, 1_1, 2_1, 3_1, 4_1, 5_1, 0_2, 1_2, 2_2,
+                3_2, 4_2, 0_3, 1_3, 2_3, 3_3, 0_4, 1_4, 2_4, 0_5, 1_5, 0_6
+            ),
+            (f64)
+        ),
+        (
+            h,
+            BP_,
+            optional,
+            (
+                0_0, 1_0, 2_0, 3_0, 4_0, 5_0, 6_0, 0_1, 1_1, 2_1, 3_1, 4_1, 5_1, 0_2, 1_2, 2_2,
+                3_2, 4_2, 0_3, 1_3, 2_3, 3_3, 0_4, 1_4, 2_4, 0_5, 1_5, 0_6
+            ),
+            (f64)
+        )
     ))?;
 
-    wcs_params_f.write(r#"
+    wcs_params_f.write(
+        r#"
         })
     }
 }
 "#
-    .as_bytes())?;
+        .as_bytes(),
+    )?;
 
     Ok(())
 }

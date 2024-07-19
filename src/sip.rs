@@ -58,12 +58,39 @@ macro_rules! build_sip_coeffs {
                         2_0, 2_1,
                         3_0
                     ),
-                    4 => todo!(),
-                    5 => todo!(),
-                    6 => todo!(),
+                    4 => combi_sip_coeff!(
+                        $params,
+                        $id,
+                        0_0, 0_1, 0_2, 0_3, 0_4,
+                        1_0, 1_1, 1_2, 1_3,
+                        2_0, 2_1, 2_2,
+                        3_0, 3_1,
+                        4_0
+                    ),
+                    5 => combi_sip_coeff!(
+                        $params,
+                        $id,
+                        0_0, 0_1, 0_2, 0_3, 0_4, 0_5,
+                        1_0, 1_1, 1_2, 1_3, 1_4,
+                        2_0, 2_1, 2_2, 2_3,
+                        3_0, 3_1, 3_2,
+                        4_0, 4_1,
+                        5_0
+                    ),
+                    6 => combi_sip_coeff!(
+                        $params,
+                        $id,
+                        0_0, 0_1, 0_2, 0_3, 0_4, 0_5, 0_6,
+                        1_0, 1_1, 1_2, 1_3, 1_4, 1_5,
+                        2_0, 2_1, 2_2, 2_3, 2_4,
+                        3_0, 3_1, 3_2, 3_3,
+                        4_0, 4_1, 4_2,
+                        5_0, 5_1,
+                        6_0
+                    ),
                     _ => Err(crate::error::Error::SIPMaxOrderLimitReached)
                 }?;
-    
+
                 Ok(
                     SipCoeff::new(
                         coeffs.into_iter()
@@ -89,10 +116,8 @@ pub fn parse_sip(params: &WCSParams, crpix1: f64, crpix2: f64) -> Result<Sip, Er
             let ap_coeffs: Result<SipCoeff, Error> = build_sip_coeffs!(params, AP);
             let bp_coeffs: Result<SipCoeff, Error> = build_sip_coeffs!(params, BP);
 
-            Some(SipAB::new(
-                ap_coeffs?, bp_coeffs?
-            ))
-        },
+            Some(SipAB::new(ap_coeffs?, bp_coeffs?))
+        }
         _ => None,
     };
 
