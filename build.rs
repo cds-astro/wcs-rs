@@ -52,30 +52,28 @@ macro_rules! declare_card {
 }
 
 macro_rules! parse_card {
-    (@@ ($header:ident, $key:ident, $optional:ident, ($( $type:ty ),*))) => {
+    (@@ ($header:ident, $key:ident, $optional:ident, $type:ty)) => {
         paste! {
             concat!(
                 "           ",
                 stringify!([<$key:lower>]),
                 ": parse_",
                 stringify!($optional),
-                "_card_with_type!(",
-                "h, ",
+                "_card_with_type::<",
+                stringify!($type),
+                ">(h, \"",
                 stringify!($key),
-                $(
-                    concat!(", ", stringify!($type))
-                ),*,
-                ")?,",
+                "\")?,",
                 "\n"
             )
         }
     };
 
-    (@ ($header:ident, $key:ident, $optional:ident, (), $type:tt)) => {
+    (@ ($header:ident, $key:ident, $optional:ident, (), $type:ty)) => {
         parse_card!(@@ ($header, $key, $optional, $type))
     };
 
-    (@ ($header:ident, $key:ident, $optional:ident, ($( $i:literal ),*), $type:tt)) => {
+    (@ ($header:ident, $key:ident, $optional:ident, ($( $i:literal ),*), $type:ty)) => {
         paste! {
             concat!(
                 $(
@@ -85,7 +83,7 @@ macro_rules! parse_card {
         }
     };
 
-    (@ ($header:ident, $key:ident, $optional:ident, [($( $i:literal ),*), $j:tt], $type:tt)) => {
+    (@ ($header:ident, $key:ident, $optional:ident, [($( $i:literal ),*), $j:tt], $type:ty)) => {
         paste! {
             concat!(
                 $(
@@ -95,7 +93,7 @@ macro_rules! parse_card {
         }
     };
 
-    ($(($header:ident, $key:ident, $optional:ident, $i:tt, $type:tt)),*) => {
+    ($(($header:ident, $key:ident, $optional:ident, $i:tt, $type:ty)),*) => {
         concat!(
             $(
                 parse_card!(@ ($header, $key, $optional, $i, $type))
@@ -111,7 +109,7 @@ pub fn write(path: PathBuf) -> Result<(), Box<dyn Error>> {
     hdu::header::{extension::image::Image, Header},
 };
 use serde::{Deserialize, Serialize};
-
+use fitsrs::card::CardValue;
 use crate::{
     error::Error,
 };
@@ -220,68 +218,48 @@ pub struct WCSParams {
     wcs_params_f.write(r#"
 }
 
-macro_rules! try_parse_card_from_header {
-    ( $header:ident, $key:tt, $type:ty ) => {
-        {
-            let a = match stringify!($key).len() {
-                1 => concat!(stringify!($key), "       "),
-                2 => concat!(stringify!($key), "      "),
-                3 => concat!(stringify!($key), "     "),
-                4 => concat!(stringify!($key), "    "),
-                5 => concat!(stringify!($key), "   "),
-                6 => concat!(stringify!($key), "  "),
-                7 => concat!(stringify!($key), " "),
-                8 => stringify!($key),
-                _ => unreachable!()
-            };
-            let bytes = dbg!(a).as_bytes().as_ptr() as *const [u8; 8];
-        
-            dbg!($header.get_parsed::<$type>(unsafe { dbg!(&*bytes) })).transpose()
-        }
-    };
+fn try_parse_card_from_header<T: CardValue>(header: &Header<Image>, key: &'static str) -> Result<Option<T>, Error> {
+    let mut key_s = key.to_string();
+    let filled_spaces = (0..(8 - key_s.len())).map(|_| " ").collect::<String>();
+    key_s.push_str(&filled_spaces);
+    
+    let bytes = key_s.as_bytes().as_ptr() as *const [u8; 8];
+    header.get_parsed::<T>(unsafe { &*bytes }).transpose().map_err(|e| e.into())
 }
  
-macro_rules! parse_optional_card_with_type {
-    ($header:ident, $key:tt, $type:ty) => {
-        {
-            let result: Result<Option<$type>, Error> = match try_parse_card_from_header!($header, $key, $type) {
-                Ok(v) => Ok(v),
-                _ => {
-                    let str = try_parse_card_from_header!($header, $key, String)
-                        .unwrap_or(None);
+fn parse_optional_card_with_type<T: CardValue + std::str::FromStr>(header: &Header<Image>, key: &'static str) -> Result<Option<T>, Error> {
+    match try_parse_card_from_header::<T>(header, key) {
+        Ok(v) => Ok(v),
+        _ => {
+            let str = try_parse_card_from_header::<String>(header, key)
+                .unwrap_or(None);
 
-                    Ok(if let Some(ss) = str {
-                        ss.trim().parse::<$type>()
-                            .map(|v| Some(v))
-                            .unwrap_or(None)
-                            //.map_err(|_| Error::CardWrongType(stringify!($key).to_string(), std::any::type_name::<($( $ts ),*)>().to_string()))
-                    } else {
-                        // card not found but it is ok as it is not mandatory
-                        None
-                    })
-                }
-            };
-
-            result
+            Ok(if let Some(ss) = str {
+                ss.trim().parse::<T>()
+                    .map(|v| Some(v))
+                    .unwrap_or(None)
+                    //.map_err(|_| Error::CardWrongType(key.to_string(), std::any::type_name::<String>().to_string()))
+            } else {
+                // card not found but it is ok as it is not mandatory
+                None
+            })
         }
-    };
+    }
 }
 
-macro_rules! parse_mandatory_card_with_type {
-    ($header:ident, $key:tt, $type:ty) => {
-        match try_parse_card_from_header!($header, $key, $type) {
-            // No parsing error and found
-            Ok(Some(v)) => {
-                Ok(v)
-            },
-            // No error but not found, we return an error
-            Ok(None) => Err(Error::MandatoryWCSKeywordsMissing(stringify!($key))),
-            // Return the parsing error
-            Err(e) => {
-                Err(e.into())
-            }
+fn parse_mandatory_card_with_type<T: CardValue>(header: &Header<Image>, key: &'static str) -> Result<T, Error> {
+    match try_parse_card_from_header::<T>(header, key) {
+        // No parsing error and found
+        Ok(Some(v)) => {
+            Ok(v)
+        },
+        // No error but not found, we return an error
+        Ok(None) => Err(Error::MandatoryWCSKeywordsMissing(key)),
+        // Return the parsing error
+        Err(e) => {
+            Err(e.into())
         }
-    };
+    }
 }
 
 impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
@@ -291,34 +269,34 @@ impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
         Ok(WCSParams {"#.as_bytes())?;
 
     wcs_params_f.write(parse_card!(
-        (h, NAXIS, mandatory, (1, 2), (i64)),
-        (h, CTYPE1, mandatory, (), (String)),
-        (h, CTYPE, optional, (2, 3), (String)),
-        (h, NAXIS, optional, (), (i64)),
-        (h, A_ORDER, optional, (), (i64)),
-        (h, B_ORDER, optional, (), (i64)),
-        (h, AP_ORDER, optional, (), (i64)),
-        (h, BP_ORDER, optional, (), (i64)),
-        (h, CRPIX, optional, (1, 2, 3), (f64)),
-        (h, CRVAL, optional, (1, 2, 3), (f64)),
-        (h, CROTA, optional, (1, 2, 3), (f64)),
-        (h, CDELT, optional, (1, 2, 3), (f64)),
-        (h, NAXIS, optional, (3, 4), (i64)),
-        (h, LONPOLE, optional, (), (f64)),
-        (h, LATPOLE, optional, (), (f64)),
-        (h, EQUINOX, optional, (), (f64)),
-        (h, EPOCH, optional, (), (f64)),
-        (h, RADESYS, optional, (), (String)),
-        (h, PV1_, optional, (0, 1, 2), (f64)),
+        (h, NAXIS, mandatory, (1, 2), i64),
+        (h, CTYPE1, mandatory, (), String),
+        (h, CTYPE, optional, (2, 3), String),
+        (h, NAXIS, optional, (), i64),
+        (h, A_ORDER, optional, (), i64),
+        (h, B_ORDER, optional, (), i64),
+        (h, AP_ORDER, optional, (), i64),
+        (h, BP_ORDER, optional, (), i64),
+        (h, CRPIX, optional, (1, 2, 3), f64),
+        (h, CRVAL, optional, (1, 2, 3), f64),
+        (h, CROTA, optional, (1, 2, 3), f64),
+        (h, CDELT, optional, (1, 2, 3), f64),
+        (h, NAXIS, optional, (3, 4), i64),
+        (h, LONPOLE, optional, (), f64),
+        (h, LATPOLE, optional, (), f64),
+        (h, EQUINOX, optional, (), f64),
+        (h, EPOCH, optional, (), f64),
+        (h, RADESYS, optional, (), String),
+        (h, PV1_, optional, (0, 1, 2), f64),
         (
             h,
             PV2_,
             optional,
             (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20),
-            (f64)
+            f64
         ),
-        (h, CD, optional, [(1, 2, 3), (1, 2, 3)], (f64)),
-        (h, PC, optional, [(1, 2, 3), (1, 2, 3)], (f64)),
+        (h, CD, optional, [(1, 2, 3), (1, 2, 3)], f64),
+        (h, PC, optional, [(1, 2, 3), (1, 2, 3)], f64),
         (
             h,
             A_,
@@ -327,7 +305,7 @@ impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
                 0_0, 1_0, 2_0, 3_0, 4_0, 5_0, 6_0, 0_1, 1_1, 2_1, 3_1, 4_1, 5_1, 0_2, 1_2, 2_2,
                 3_2, 4_2, 0_3, 1_3, 2_3, 3_3, 0_4, 1_4, 2_4, 0_5, 1_5, 0_6
             ),
-            (f64)
+            f64
         ),
         (
             h,
@@ -337,7 +315,7 @@ impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
                 0_0, 1_0, 2_0, 3_0, 4_0, 5_0, 6_0, 0_1, 1_1, 2_1, 3_1, 4_1, 5_1, 0_2, 1_2, 2_2,
                 3_2, 4_2, 0_3, 1_3, 2_3, 3_3, 0_4, 1_4, 2_4, 0_5, 1_5, 0_6
             ),
-            (f64)
+            f64
         ),
         (
             h,
@@ -347,7 +325,7 @@ impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
                 0_0, 1_0, 2_0, 3_0, 4_0, 5_0, 6_0, 0_1, 1_1, 2_1, 3_1, 4_1, 5_1, 0_2, 1_2, 2_2,
                 3_2, 4_2, 0_3, 1_3, 2_3, 3_3, 0_4, 1_4, 2_4, 0_5, 1_5, 0_6
             ),
-            (f64)
+            f64
         ),
         (
             h,
@@ -357,7 +335,7 @@ impl<'a> TryFrom<&'a Header<Image>> for WCSParams {
                 0_0, 1_0, 2_0, 3_0, 4_0, 5_0, 6_0, 0_1, 1_1, 2_1, 3_1, 4_1, 5_1, 0_2, 1_2, 2_2,
                 3_2, 4_2, 0_3, 1_3, 2_3, 3_3, 0_4, 1_4, 2_4, 0_5, 1_5, 0_6
             ),
-            (f64)
+            f64
         )
     ))?;
 
