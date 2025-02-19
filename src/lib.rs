@@ -2,6 +2,9 @@ extern crate mapproj;
 #[macro_use]
 extern crate quick_error;
 
+
+#[doc = include_str!("../readme.md")]
+
 pub mod error;
 
 use coo_system::CooSystem;

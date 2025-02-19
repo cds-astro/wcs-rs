@@ -43,55 +43,58 @@ Example
 use std::fs::File;
 use std::io::BufReader;
 
-use fitsrs::Fits;
-use wcsrs::{
+use wcs::{
     WCS,
+    WCSParams,
     ImgXY, LonLat
 };
 
-fn main() {
-    // 1. Parse a fits file using fitsrs
-    let mut f = File::open("<your fits file path>").unwrap();
-    let mut reader = BufReader::new(f);
-    let Fits { hdu } = Fits::from_reader(&mut reader).unwrap();
+// Get the crval and crpix values along each axes
+let crval1: f64 = 185.445488837;
+let crval2: f64 = 4.47896032431;
+let crpix1: f64 = 588.995094299;
+let crpix2: f64 = 308.307905197;
 
-    let header = hdu.get_header();
-    // Get the crval and crpix values along each axes
-    let crval1 = header
-        .get_parsed::<f64>(b"CRVAL1  ")
-        .unwrap_or(Ok(0.0))
-        .unwrap();
-    let crval2 = header
-        .get_parsed::<f64>(b"CRVAL2  ")
-        .unwrap_or(Ok(0.0))
-        .unwrap();
-    let crpix1 = header
-        .get_parsed::<f64>(b"CRPIX1  ")
-        .unwrap_or(Ok(0.0))
-        .unwrap();
-    let crpix2 = header
-        .get_parsed::<f64>(b"CRPIX2  ")
-        .unwrap_or(Ok(0.0))
-        .unwrap();
+// 2. Create a WCS from a specific header unit
+let params: WCSParams = serde_json::from_str(r#"
+    {
+        "NAXIS": 2,
+        "CTYPE1": "RA---TAN",
+        "CTYPE2": "DEC--TAN",
+        "EQUINOX": 2000.0,
+        "LONPOLE": 180.0,
+        "LATPOLE": 0.0,
+        "CRVAL1": 185.445488837,
+        "CRVAL2": 4.47896032431,
+        "CRPIX1": 588.995094299,
+        "CRPIX2": 308.307905197,
+        "CUNIT1": "deg",
+        "CUNIT2": "deg",
+        "CD1_1": -0.000223666022989,
+        "CD1_2": -0.000296578064584,
+        "CD2_1": -0.000296427555509,
+        "CD2_2": 0.000223774308964,
+        "NAXIS1": 1080,
+        "NAXIS2": 705
+    }
+"#).unwrap();
+let wcs = WCS::new(&params).unwrap();
 
-    // 2. Create a WCS from a specific header unit
-    let wcs = WCS::new(&header).unwrap();
+// 3. Once the WCS object is created, performs:
+// * The projection of the center (lon, lat) = (crval1, crval2)
+let lonlat = LonLat::new(crval1.to_radians(), crval2.to_radians());
+let xy = wcs
+    .proj_lonlat(&lonlat)
+    .unwrap();
+assert!((xy.x() - crpix1).abs() <= 1e-6);
+assert!((xy.y() - crpix2).abs() <= 1e-6);
 
-    // 3. Once the WCS object is created, performs:
-    // * The projection of the center (lon, lat) = (crval1, crval2)
-    let lonlat = LonLat::new(crval1.to_radians(), crval2.to_radians());
-    let xy = wcs
-        .proj_lonlat(&lonlat)
-        .unwrap();
-    assert_delta!(xy.x(), crpix1, 1e-6);
-    assert_delta!(xy.y(), crpix2, 1e-6);
+// * The unprojection of (X, Y) = (crpix1, crpix2)
+let xy = ImgXY::new(crpix1, crpix2);
+let lonlat = wcs
+    .unproj_lonlat(&xy)
+    .unwrap();
+assert!((lonlat.lon() - crval1.to_radians()).abs() <= 1e-6);
+assert!((lonlat.lat() - crval2.to_radians()).abs() <= 1e-6);
 
-    // * The unprojection of (X, Y) = (crpix1, crpix2)
-    let xy = ImgXY::new(crpix1, crpix2);
-    let lonlat = wcs
-        .unproj_lonlat(&xy)
-        .unwrap();
-    assert_delta!(lonlat.lon(), crval1.to_radians(), 1e-6);
-    assert_delta!(lonlat.lat(), crval2.to_radians(), 1e-6);
-}
 ```
