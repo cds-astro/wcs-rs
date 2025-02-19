@@ -8,11 +8,6 @@ quick_error! {
         CardWrongType(key: String, tt: String) {
             display("{} could not be parsed {}", key, tt)
         }
-        /// Encountered when parsing the Fits file, returned from fitsrs
-        FitsParsing(err: fitsrs::error::Error) {
-            from()
-            display("{}", err)
-        }
         /// Unprojection not defined
         UnprojNotDefined(img_x: f64, img_y: f64) {
             display("({}, {}) is out of projection", img_x, img_y)
@@ -25,6 +20,10 @@ quick_error! {
         /// Encountered when mandatory keywords have not been found
         MandatoryWCSKeywordsMissing(keyword: &'static str) {
             display("{} keyword is mandatory for defining a WCS", keyword)
+        }
+        /// Encountered when mandatory keywords have not been found
+        NotSupportedNaxis(naxis: i64) {
+            display("NAXIS={} not supported", naxis)
         }
         /// Not implemented projection error
         NotImplementedProjection(proj_name: String) {

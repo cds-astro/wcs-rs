@@ -1,4 +1,3 @@
-extern crate fitsrs;
 extern crate mapproj;
 #[macro_use]
 extern crate quick_error;
@@ -17,7 +16,6 @@ use crate::projection::WCSCanonicalProjection;
 pub use params::WCSParams;
 
 // Imports
-use fitsrs::hdu::header::{extension::image::Image, Header};
 use mapproj::{
     conic::{cod::Cod, coe::Coe, coo::Coo, cop::Cop},
     cylindrical::{car::Car, cea::Cea, cyp::Cyp, mer::Mer},
@@ -35,12 +33,12 @@ use mapproj::{
 use paste::paste;
 /// macro
 macro_rules! create_specific_proj {
-    ( $proj_name:ident, $params:expr, $ctype1:expr, $crpix1:expr, $crpix2:expr, $img2proj:expr ) => {{
+    ( $proj_name:ident, $params:expr, $ctype1:expr, $naxis1:expr, $naxis2:expr, $crpix1:expr, $crpix2:expr, $img2proj:expr ) => {{
         let (positional_angle, proj) = $proj_name::parse_proj(&$params)?;
 
         let is_sip_found = &$ctype1[($ctype1.len() - 3)..] == "SIP";
         if is_sip_found {
-            let sip = sip::parse_sip($params, $crpix1, $crpix2)?;
+            let sip = sip::parse_sip($params, $naxis1, $naxis2, $crpix1, $crpix2)?;
             let img2proj = WcsWithSipImgXY2ProjXY::new($img2proj, sip);
 
             paste! {
@@ -65,10 +63,8 @@ pub type LonLat = mapproj::LonLat;
 #[derive(Debug)]
 pub struct WCS {
     /* Metadata keywords */
-    /// Width of the image in pixels
-    naxis1: u64,
-    /// Height of the image in pixels
-    naxis2: u64,
+    /// Size of the image in pixels in its i-th dimension
+    naxisi: Box<[i64]>,
     /// Field of view of the image along NAXIS1
     fov1: f64,
     /// Field of view of the image along NAXIS2
@@ -85,70 +81,50 @@ pub struct WCS {
 ///   Results are given as a (lon, lat) tuple expressed in degrees
 impl WCS {
     pub fn new(params: &WCSParams) -> Result<Self, Error> {
-        let proj = WCSProj::new(params)?;
+        let naxisi = match params.naxis {
+            2 => {
+                let naxis1 = params.naxis1.ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?;
+                let naxis2 = params.naxis2.ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?;
 
-        let naxis1 = params.naxis1;
-        let naxis2 = params.naxis2;
+                Ok(vec![naxis1, naxis2].into_boxed_slice())
+            }
+            3 => {
+                let naxis1 = params.naxis1.ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?;
+                let naxis2 = params.naxis2.ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?;
+                let naxis3 = params.naxis3.ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS3"))?;
 
-        // Compute the field of view along the naxis1 and naxis2 axis
-        /*
-                let center = proj
-                    .unproj_lonlat(&ImgXY::new((naxis1 as f64) / 2.0, (naxis2 as f64) / 2.0))
-                    .ok_or(Error::UnprojNotDefined(
-                        (naxis1 as f64) / 2.0,
-                        (naxis2 as f64) / 2.0,
-                    ))?;
+                Ok(vec![naxis1, naxis2, naxis3].into_boxed_slice())
+            }
+            4 => {
+                let naxis1 = params.naxis1.ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?;
+                let naxis2 = params.naxis2.ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?;
+                let naxis3 = params.naxis3.ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS3"))?;
+                let naxis4 = params.naxis4.ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS4"))?;
 
-                let half_fov1 = if let Some(top) =
-                    proj.unproj_lonlat(&ImgXY::new((naxis1 as f64) / 2.0, naxis2 as f64))
-                {
-                    utils::angular_dist(top.into(), center.clone().into())
-                } else {
-                    180.0_f64.to_radians()
-                };
+                Ok(vec![naxis1, naxis2, naxis3, naxis4].into_boxed_slice())
+            }
+            _ => {
+                Err(Error::NotSupportedNaxis(params.naxis))
+            }
+        }?;
 
-                let half_fov2 =
-                    if let Some(left) = proj.unproj_lonlat(&ImgXY::new(0.0, (naxis2 as f64) / 2.0)) {
-                        utils::angular_dist(left.into(), center.into())
-                    } else {
-                        180.0_f64.to_radians()
-                    };
-        */
+        // At least NAXIS >= 2
+        let proj = WCSProj::new(naxisi[0], naxisi[1], params)?;
 
-        /*let fov1 = params
-            .cdelt1
-            .or(params.cd1_1)
-            .map(|cdelt1| (cdelt1 * (naxis1 as f64)).abs())
-            .unwrap_or(180.0_f64);
-        let fov2 = params
-            .cdelt2
-            .or(params.cd2_2)
-            .map(|cdelt2| (cdelt2 * (naxis2 as f64)).abs())
-            .unwrap_or(180.0_f64);*/
-        let fov1 = proj.s_lon * (naxis1 as f64);
-        let fov2 = proj.s_lat * (naxis2 as f64);
+        let fov1 = proj.s_lon * (naxisi[0] as f64);
+        let fov2 = proj.s_lat * (naxisi[1] as f64);
 
         Ok(WCS {
-            naxis1: naxis1 as u64,
-            naxis2: naxis2 as u64,
+            naxisi,
             fov1,
             fov2,
             proj,
         })
     }
 
-    /// Create a WCS from a specific fits header parsed with fitsrs
-    /// # Param
-    /// * `header`: Header unit coming from fitsrs.
-    ///   This contains all the cards of one HDU.
-    pub fn from_fits_header(header: &Header<Image>) -> Result<Self, Error> {
-        let params: WCSParams = header.try_into()?;
-        Self::new(&params)
-    }
-
     /// Returns the dimensions of the image given by the NAXIS1 x NAXIS2 keyword
-    pub fn img_dimensions(&self) -> (u64, u64) {
-        (self.naxis1, self.naxis2)
+    pub fn img_dimensions(&self) -> &[i64] {
+        &self.naxisi[..]
     }
 
     pub fn field_of_view(&self) -> (f64, f64) {
@@ -331,9 +307,11 @@ fn parse_cd_matrix(params: &WCSParams) -> Option<(f64, f64, f64, f64)> {
 impl WCSProj {
     /// Create a WCS from a specific fits header parsed with fitsrs
     /// # Param
-    /// * `params`: Header unit coming from fitsrs.
+    /// * `naxis1` - Size of the image in its first dimension (in pixels)
+    /// * `naxis2` - Size of the image in its second dimension (in pixels)
+    /// * `params` - Header unit coming from fitsrs.
     ///   This contains all the cards of one HDU.
-    pub fn new(params: &WCSParams) -> Result<Self, Error> {
+    pub fn new(naxis1: i64, naxis2: i64, params: &WCSParams) -> Result<Self, Error> {
         // 1. Identify the image <-> intermediate projection
         // a. Linear transformation matrix cases:
         // - CRPIXi + CDij
@@ -388,77 +366,77 @@ impl WCSProj {
         let (proj, pos_angle) = match proj_name.as_bytes() {
             // Zenithal
             b"AZP" => {
-                create_specific_proj!(Azp, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Azp, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"SZP" => {
-                create_specific_proj!(Szp, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Szp, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"TAN" => {
-                create_specific_proj!(Tan, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Tan, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"STG" => {
-                create_specific_proj!(Stg, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Stg, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"SIN" => {
-                create_specific_proj!(Sin, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Sin, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"ARC" => {
-                create_specific_proj!(Arc, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Arc, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"ZPN" => {
-                create_specific_proj!(Zpn, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Zpn, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"ZEA" => {
-                create_specific_proj!(Zea, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Zea, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"AIR" => {
-                create_specific_proj!(Air, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Air, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"NCP" => {
-                create_specific_proj!(Ncp, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Ncp, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             // Cylindrical
             b"CYP" => {
-                create_specific_proj!(Cyp, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Cyp, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"CEA" => {
-                create_specific_proj!(Cea, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Cea, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"CAR" => {
-                create_specific_proj!(Car, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Car, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"MER" => {
-                create_specific_proj!(Mer, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Mer, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             // Pseudo-cylindrical
             b"SFL" => {
-                create_specific_proj!(Sfl, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Sfl, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"PAR" => {
-                create_specific_proj!(Par, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Par, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"MOL" => {
-                create_specific_proj!(Mol, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Mol, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"AIT" => {
-                create_specific_proj!(Ait, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Ait, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             // Conic
             b"COP" => {
-                create_specific_proj!(Cop, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Cop, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"COD" => {
-                create_specific_proj!(Cod, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Cod, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"COE" => {
-                create_specific_proj!(Coe, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Coe, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             b"COO" => {
-                create_specific_proj!(Coo, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Coo, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             // HEALPix
             b"HPX" => {
-                create_specific_proj!(Hpx, params, ctype1, crpix1, crpix2, img2proj)
+                create_specific_proj!(Hpx, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
             }
             _ => Err(Error::NotImplementedProjection(proj_name.to_string())),
         }?;
@@ -764,59 +742,308 @@ impl WCSProj {
 #[cfg(test)]
 mod tests {
     use super::WCS;
+    use crate::WCSParams;
+    use crate::Error;
+
     use crate::mapproj::Projection;
     use fitsrs::fits::Fits;
-    use fitsrs::hdu::{
-        data::iter,
-        header::{extension::image::Image, Header},
-    };
+    use fitsrs::card::CardValue;
+    use fitsrs::hdu::header::{extension::image::Image, Header};
+    use fitsrs::ImageData;
+    use fitsrs::card::Value;
+
     use glob::glob;
     use mapproj::{CanonicalProjection, ImgXY, LonLat};
     use std::f64::consts::PI;
     use std::fs::File;
     use std::io::BufReader;
 
+    use std::convert::TryFrom;
+    use std::str::FromStr;
+    
+    fn parse_optional_card_with_type<T: CardValue + FromStr>(header: &Header<Image>, key: &'static str) -> Result<Option<T>, Error> {
+        match  header.get_parsed::<T>(key).transpose() {
+            Ok(v) => Ok(v),
+            _ => {
+                let str = header.get_parsed::<String>(key).transpose()
+                    .unwrap_or(None);
+    
+                Ok(if let Some(ss) = str {
+                    ss.trim().parse::<T>()
+                        .map(|v| Some(v))
+                        .unwrap_or(None)
+                } else {
+                    // card not found but it is ok as it is not mandatory
+                    None
+                })
+            }
+        }
+    }
+    
+    fn parse_mandatory_card_with_type<T: CardValue>(header: &Header<Image>, key: &'static str) -> Result<T, &'static str> {
+        match header.get_parsed::<T>(key) {
+            // No parsing error and found
+            Some(Ok(v)) => {
+                Ok(v)
+            },
+            // No error but not found, we return an error
+            None => Err("Mandatory keyword not found"),
+            // Return the parsing error
+            Some(Err(_)) => {
+                Err("Error parsing mandatory keyword")
+            }
+        }
+    }
+    
+    impl<'a> TryFrom<&'a Header<Image>> for WCS {
+        type Error = Error;
+    
+        fn try_from(h: &'a Header<Image>) -> Result<Self, Self::Error> {
+            let params = WCSParams {
+                naxis: parse_mandatory_card_with_type::<i64>(h, "NAXIS").unwrap(),
+                ctype1: parse_mandatory_card_with_type::<String>(h, "CTYPE1").unwrap(),
+
+                naxis1: parse_optional_card_with_type::<i64>(h, "NAXIS1")?,
+                naxis2: parse_optional_card_with_type::<i64>(h, "NAXIS2")?,
+
+                ctype2: parse_optional_card_with_type::<String>(h, "CTYPE2")?,
+                ctype3: parse_optional_card_with_type::<String>(h, "CTYPE3")?,
+
+                a_order: parse_optional_card_with_type::<i64>(h, "A_ORDER")?,
+                b_order: parse_optional_card_with_type::<i64>(h, "B_ORDER")?,
+                ap_order: parse_optional_card_with_type::<i64>(h, "AP_ORDER")?,
+                bp_order: parse_optional_card_with_type::<i64>(h, "BP_ORDER")?,
+                crpix1: parse_optional_card_with_type::<f64>(h, "CRPIX1")?,
+                crpix2: parse_optional_card_with_type::<f64>(h, "CRPIX2")?,
+                crpix3: parse_optional_card_with_type::<f64>(h, "CRPIX3")?,
+                crval1: parse_optional_card_with_type::<f64>(h, "CRVAL1")?,
+                crval2: parse_optional_card_with_type::<f64>(h, "CRVAL2")?,
+                crval3: parse_optional_card_with_type::<f64>(h, "CRVAL3")?,
+                crota1: parse_optional_card_with_type::<f64>(h, "CROTA1")?,
+                crota2: parse_optional_card_with_type::<f64>(h, "CROTA2")?,
+                crota3: parse_optional_card_with_type::<f64>(h, "CROTA3")?,
+                cdelt1: parse_optional_card_with_type::<f64>(h, "CDELT1")?,
+                cdelt2: parse_optional_card_with_type::<f64>(h, "CDELT2")?,
+                cdelt3: parse_optional_card_with_type::<f64>(h, "CDELT3")?,
+                naxis3: parse_optional_card_with_type::<i64>(h, "NAXIS3")?,
+                naxis4: parse_optional_card_with_type::<i64>(h, "NAXIS4")?,
+                lonpole: parse_optional_card_with_type::<f64>(h, "LONPOLE")?,
+                latpole: parse_optional_card_with_type::<f64>(h, "LATPOLE")?,
+                equinox: parse_optional_card_with_type::<f64>(h, "EQUINOX")?,
+                epoch: parse_optional_card_with_type::<f64>(h, "EPOCH")?,
+                radesys: parse_optional_card_with_type::<String>(h, "RADESYS")?,
+                pv1_0: parse_optional_card_with_type::<f64>(h, "PV1_0")?,
+                pv1_1: parse_optional_card_with_type::<f64>(h, "PV1_1")?,
+                pv1_2: parse_optional_card_with_type::<f64>(h, "PV1_2")?,
+                pv2_0: parse_optional_card_with_type::<f64>(h, "PV2_0")?,
+                pv2_1: parse_optional_card_with_type::<f64>(h, "PV2_1")?,
+                pv2_2: parse_optional_card_with_type::<f64>(h, "PV2_2")?,
+                pv2_3: parse_optional_card_with_type::<f64>(h, "PV2_3")?,
+                pv2_4: parse_optional_card_with_type::<f64>(h, "PV2_4")?,
+                pv2_5: parse_optional_card_with_type::<f64>(h, "PV2_5")?,
+                pv2_6: parse_optional_card_with_type::<f64>(h, "PV2_6")?,
+                pv2_7: parse_optional_card_with_type::<f64>(h, "PV2_7")?,
+                pv2_8: parse_optional_card_with_type::<f64>(h, "PV2_8")?,
+                pv2_9: parse_optional_card_with_type::<f64>(h, "PV2_9")?,
+                pv2_10: parse_optional_card_with_type::<f64>(h, "PV2_10")?,
+                pv2_11: parse_optional_card_with_type::<f64>(h, "PV2_11")?,
+                pv2_12: parse_optional_card_with_type::<f64>(h, "PV2_12")?,
+                pv2_13: parse_optional_card_with_type::<f64>(h, "PV2_13")?,
+                pv2_14: parse_optional_card_with_type::<f64>(h, "PV2_14")?,
+                pv2_15: parse_optional_card_with_type::<f64>(h, "PV2_15")?,
+                pv2_16: parse_optional_card_with_type::<f64>(h, "PV2_16")?,
+                pv2_17: parse_optional_card_with_type::<f64>(h, "PV2_17")?,
+                pv2_18: parse_optional_card_with_type::<f64>(h, "PV2_18")?,
+                pv2_19: parse_optional_card_with_type::<f64>(h, "PV2_19")?,
+                pv2_20: parse_optional_card_with_type::<f64>(h, "PV2_20")?,
+                cd1_1: parse_optional_card_with_type::<f64>(h, "CD1_1")?,
+                cd1_2: parse_optional_card_with_type::<f64>(h, "CD1_2")?,
+                cd1_3: parse_optional_card_with_type::<f64>(h, "CD1_3")?,
+                cd2_1: parse_optional_card_with_type::<f64>(h, "CD2_1")?,
+                cd2_2: parse_optional_card_with_type::<f64>(h, "CD2_2")?,
+                cd2_3: parse_optional_card_with_type::<f64>(h, "CD2_3")?,
+                cd3_1: parse_optional_card_with_type::<f64>(h, "CD3_1")?,
+                cd3_2: parse_optional_card_with_type::<f64>(h, "CD3_2")?,
+                cd3_3: parse_optional_card_with_type::<f64>(h, "CD3_3")?,
+                pc1_1: parse_optional_card_with_type::<f64>(h, "PC1_1")?,
+                pc1_2: parse_optional_card_with_type::<f64>(h, "PC1_2")?,
+                pc1_3: parse_optional_card_with_type::<f64>(h, "PC1_3")?,
+                pc2_1: parse_optional_card_with_type::<f64>(h, "PC2_1")?,
+                pc2_2: parse_optional_card_with_type::<f64>(h, "PC2_2")?,
+                pc2_3: parse_optional_card_with_type::<f64>(h, "PC2_3")?,
+                pc3_1: parse_optional_card_with_type::<f64>(h, "PC3_1")?,
+                pc3_2: parse_optional_card_with_type::<f64>(h, "PC3_2")?,
+                pc3_3: parse_optional_card_with_type::<f64>(h, "PC3_3")?,
+                a_0_0: parse_optional_card_with_type::<f64>(h, "A_0_0")?,
+                a_1_0: parse_optional_card_with_type::<f64>(h, "A_1_0")?,
+                a_2_0: parse_optional_card_with_type::<f64>(h, "A_2_0")?,
+                a_3_0: parse_optional_card_with_type::<f64>(h, "A_3_0")?,
+                a_4_0: parse_optional_card_with_type::<f64>(h, "A_4_0")?,
+                a_5_0: parse_optional_card_with_type::<f64>(h, "A_5_0")?,
+                a_6_0: parse_optional_card_with_type::<f64>(h, "A_6_0")?,
+                a_0_1: parse_optional_card_with_type::<f64>(h, "A_0_1")?,
+                a_1_1: parse_optional_card_with_type::<f64>(h, "A_1_1")?,
+                a_2_1: parse_optional_card_with_type::<f64>(h, "A_2_1")?,
+                a_3_1: parse_optional_card_with_type::<f64>(h, "A_3_1")?,
+                a_4_1: parse_optional_card_with_type::<f64>(h, "A_4_1")?,
+                a_5_1: parse_optional_card_with_type::<f64>(h, "A_5_1")?,
+                a_0_2: parse_optional_card_with_type::<f64>(h, "A_0_2")?,
+                a_1_2: parse_optional_card_with_type::<f64>(h, "A_1_2")?,
+                a_2_2: parse_optional_card_with_type::<f64>(h, "A_2_2")?,
+                a_3_2: parse_optional_card_with_type::<f64>(h, "A_3_2")?,
+                a_4_2: parse_optional_card_with_type::<f64>(h, "A_4_2")?,
+                a_0_3: parse_optional_card_with_type::<f64>(h, "A_0_3")?,
+                a_1_3: parse_optional_card_with_type::<f64>(h, "A_1_3")?,
+                a_2_3: parse_optional_card_with_type::<f64>(h, "A_2_3")?,
+                a_3_3: parse_optional_card_with_type::<f64>(h, "A_3_3")?,
+                a_0_4: parse_optional_card_with_type::<f64>(h, "A_0_4")?,
+                a_1_4: parse_optional_card_with_type::<f64>(h, "A_1_4")?,
+                a_2_4: parse_optional_card_with_type::<f64>(h, "A_2_4")?,
+                a_0_5: parse_optional_card_with_type::<f64>(h, "A_0_5")?,
+                a_1_5: parse_optional_card_with_type::<f64>(h, "A_1_5")?,
+                a_0_6: parse_optional_card_with_type::<f64>(h, "A_0_6")?,
+                ap_0_0: parse_optional_card_with_type::<f64>(h, "AP_0_0")?,
+                ap_1_0: parse_optional_card_with_type::<f64>(h, "AP_1_0")?,
+                ap_2_0: parse_optional_card_with_type::<f64>(h, "AP_2_0")?,
+                ap_3_0: parse_optional_card_with_type::<f64>(h, "AP_3_0")?,
+                ap_4_0: parse_optional_card_with_type::<f64>(h, "AP_4_0")?,
+                ap_5_0: parse_optional_card_with_type::<f64>(h, "AP_5_0")?,
+                ap_6_0: parse_optional_card_with_type::<f64>(h, "AP_6_0")?,
+                ap_0_1: parse_optional_card_with_type::<f64>(h, "AP_0_1")?,
+                ap_1_1: parse_optional_card_with_type::<f64>(h, "AP_1_1")?,
+                ap_2_1: parse_optional_card_with_type::<f64>(h, "AP_2_1")?,
+                ap_3_1: parse_optional_card_with_type::<f64>(h, "AP_3_1")?,
+                ap_4_1: parse_optional_card_with_type::<f64>(h, "AP_4_1")?,
+                ap_5_1: parse_optional_card_with_type::<f64>(h, "AP_5_1")?,
+                ap_0_2: parse_optional_card_with_type::<f64>(h, "AP_0_2")?,
+                ap_1_2: parse_optional_card_with_type::<f64>(h, "AP_1_2")?,
+                ap_2_2: parse_optional_card_with_type::<f64>(h, "AP_2_2")?,
+                ap_3_2: parse_optional_card_with_type::<f64>(h, "AP_3_2")?,
+                ap_4_2: parse_optional_card_with_type::<f64>(h, "AP_4_2")?,
+                ap_0_3: parse_optional_card_with_type::<f64>(h, "AP_0_3")?,
+                ap_1_3: parse_optional_card_with_type::<f64>(h, "AP_1_3")?,
+                ap_2_3: parse_optional_card_with_type::<f64>(h, "AP_2_3")?,
+                ap_3_3: parse_optional_card_with_type::<f64>(h, "AP_3_3")?,
+                ap_0_4: parse_optional_card_with_type::<f64>(h, "AP_0_4")?,
+                ap_1_4: parse_optional_card_with_type::<f64>(h, "AP_1_4")?,
+                ap_2_4: parse_optional_card_with_type::<f64>(h, "AP_2_4")?,
+                ap_0_5: parse_optional_card_with_type::<f64>(h, "AP_0_5")?,
+                ap_1_5: parse_optional_card_with_type::<f64>(h, "AP_1_5")?,
+                ap_0_6: parse_optional_card_with_type::<f64>(h, "AP_0_6")?,
+                b_0_0: parse_optional_card_with_type::<f64>(h, "B_0_0")?,
+                b_1_0: parse_optional_card_with_type::<f64>(h, "B_1_0")?,
+                b_2_0: parse_optional_card_with_type::<f64>(h, "B_2_0")?,
+                b_3_0: parse_optional_card_with_type::<f64>(h, "B_3_0")?,
+                b_4_0: parse_optional_card_with_type::<f64>(h, "B_4_0")?,
+                b_5_0: parse_optional_card_with_type::<f64>(h, "B_5_0")?,
+                b_6_0: parse_optional_card_with_type::<f64>(h, "B_6_0")?,
+                b_0_1: parse_optional_card_with_type::<f64>(h, "B_0_1")?,
+                b_1_1: parse_optional_card_with_type::<f64>(h, "B_1_1")?,
+                b_2_1: parse_optional_card_with_type::<f64>(h, "B_2_1")?,
+                b_3_1: parse_optional_card_with_type::<f64>(h, "B_3_1")?,
+                b_4_1: parse_optional_card_with_type::<f64>(h, "B_4_1")?,
+                b_5_1: parse_optional_card_with_type::<f64>(h, "B_5_1")?,
+                b_0_2: parse_optional_card_with_type::<f64>(h, "B_0_2")?,
+                b_1_2: parse_optional_card_with_type::<f64>(h, "B_1_2")?,
+                b_2_2: parse_optional_card_with_type::<f64>(h, "B_2_2")?,
+                b_3_2: parse_optional_card_with_type::<f64>(h, "B_3_2")?,
+                b_4_2: parse_optional_card_with_type::<f64>(h, "B_4_2")?,
+                b_0_3: parse_optional_card_with_type::<f64>(h, "B_0_3")?,
+                b_1_3: parse_optional_card_with_type::<f64>(h, "B_1_3")?,
+                b_2_3: parse_optional_card_with_type::<f64>(h, "B_2_3")?,
+                b_3_3: parse_optional_card_with_type::<f64>(h, "B_3_3")?,
+                b_0_4: parse_optional_card_with_type::<f64>(h, "B_0_4")?,
+                b_1_4: parse_optional_card_with_type::<f64>(h, "B_1_4")?,
+                b_2_4: parse_optional_card_with_type::<f64>(h, "B_2_4")?,
+                b_0_5: parse_optional_card_with_type::<f64>(h, "B_0_5")?,
+                b_1_5: parse_optional_card_with_type::<f64>(h, "B_1_5")?,
+                b_0_6: parse_optional_card_with_type::<f64>(h, "B_0_6")?,
+                bp_0_0: parse_optional_card_with_type::<f64>(h, "BP_0_0")?,
+                bp_1_0: parse_optional_card_with_type::<f64>(h, "BP_1_0")?,
+                bp_2_0: parse_optional_card_with_type::<f64>(h, "BP_2_0")?,
+                bp_3_0: parse_optional_card_with_type::<f64>(h, "BP_3_0")?,
+                bp_4_0: parse_optional_card_with_type::<f64>(h, "BP_4_0")?,
+                bp_5_0: parse_optional_card_with_type::<f64>(h, "BP_5_0")?,
+                bp_6_0: parse_optional_card_with_type::<f64>(h, "BP_6_0")?,
+                bp_0_1: parse_optional_card_with_type::<f64>(h, "BP_0_1")?,
+                bp_1_1: parse_optional_card_with_type::<f64>(h, "BP_1_1")?,
+                bp_2_1: parse_optional_card_with_type::<f64>(h, "BP_2_1")?,
+                bp_3_1: parse_optional_card_with_type::<f64>(h, "BP_3_1")?,
+                bp_4_1: parse_optional_card_with_type::<f64>(h, "BP_4_1")?,
+                bp_5_1: parse_optional_card_with_type::<f64>(h, "BP_5_1")?,
+                bp_0_2: parse_optional_card_with_type::<f64>(h, "BP_0_2")?,
+                bp_1_2: parse_optional_card_with_type::<f64>(h, "BP_1_2")?,
+                bp_2_2: parse_optional_card_with_type::<f64>(h, "BP_2_2")?,
+                bp_3_2: parse_optional_card_with_type::<f64>(h, "BP_3_2")?,
+                bp_4_2: parse_optional_card_with_type::<f64>(h, "BP_4_2")?,
+                bp_0_3: parse_optional_card_with_type::<f64>(h, "BP_0_3")?,
+                bp_1_3: parse_optional_card_with_type::<f64>(h, "BP_1_3")?,
+                bp_2_3: parse_optional_card_with_type::<f64>(h, "BP_2_3")?,
+                bp_3_3: parse_optional_card_with_type::<f64>(h, "BP_3_3")?,
+                bp_0_4: parse_optional_card_with_type::<f64>(h, "BP_0_4")?,
+                bp_1_4: parse_optional_card_with_type::<f64>(h, "BP_1_4")?,
+                bp_2_4: parse_optional_card_with_type::<f64>(h, "BP_2_4")?,
+                bp_0_5: parse_optional_card_with_type::<f64>(h, "BP_0_5")?,
+                bp_1_5: parse_optional_card_with_type::<f64>(h, "BP_1_5")?,
+                bp_0_6: parse_optional_card_with_type::<f64>(h, "BP_0_6")?,
+            };
+    
+            WCS::new(&params)
+        }
+    }
+    
+    fn wcs_from_fits_header(header: &Header<Image>) -> Result<WCS, Error> {
+        header.try_into()
+    }
+
     #[test]
     fn test_visualize() {
         let f = File::open("examples/panstarrs-rotated-around-orion.fits").unwrap();
 
-        let mut reader = BufReader::new(f);
-        let Fits { mut hdu } = Fits::from_reader(&mut reader).unwrap();
+        let reader = BufReader::new(f);
+        let mut fits = Fits::from_reader(reader);
+        let hdu = fits.next().unwrap().unwrap();
 
-        // Parse data
-        let data = match hdu.get_data_mut() {
-            iter::Data::F32(it) => it.collect::<Vec<_>>(),
-            _ => unreachable!(),
-        };
+        match hdu {
+            HDU::XImage(hdu) | HDU::Primary(hdu) => {
+                let header = hdu.get_header();
 
-        let header = hdu.get_header();
-        let wcs = WCS::from_fits_header(&header).unwrap();
-        reproject_fits_image(mapproj::zenithal::azp::Azp::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::zenithal::szp::Szp::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::zenithal::tan::Tan::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::zenithal::stg::Stg::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::zenithal::sin::Sin::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::zenithal::arc::Arc::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::zenithal::zea::Zea::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::zenithal::air::Air::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::zenithal::ncp::Ncp::new(), &wcs, &header, &data);
+                // Parse data
+                let data = match fits.get_data(&hdu) {
+                    ImageData::F32(it) => it.collect::<Vec<_>>(),
+                    _ => unreachable!(),
+                };
 
-        reproject_fits_image(mapproj::pseudocyl::mol::Mol::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::pseudocyl::ait::Ait::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::pseudocyl::par::Par::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::pseudocyl::sfl::Sfl::new(), &wcs, &header, &data);
+                let wcs = wcs_from_fits_header(&header).unwrap();
+                reproject_fits_image(mapproj::zenithal::azp::Azp::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::zenithal::szp::Szp::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::zenithal::tan::Tan::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::zenithal::stg::Stg::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::zenithal::sin::Sin::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::zenithal::arc::Arc::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::zenithal::zea::Zea::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::zenithal::air::Air::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::zenithal::ncp::Ncp::new(), &wcs, &header, &data);
 
-        reproject_fits_image(mapproj::cylindrical::cyp::Cyp::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::cylindrical::cea::Cea::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::cylindrical::car::Car::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::cylindrical::mer::Mer::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::pseudocyl::mol::Mol::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::pseudocyl::ait::Ait::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::pseudocyl::par::Par::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::pseudocyl::sfl::Sfl::new(), &wcs, &header, &data);
 
-        reproject_fits_image(mapproj::conic::cod::Cod::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::conic::cop::Cop::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::conic::coo::Coo::new(), &wcs, &header, &data);
-        reproject_fits_image(mapproj::conic::coe::Coe::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::cylindrical::cyp::Cyp::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::cylindrical::cea::Cea::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::cylindrical::car::Car::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::cylindrical::mer::Mer::new(), &wcs, &header, &data);
 
-        reproject_fits_image(mapproj::hybrid::hpx::Hpx::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::conic::cod::Cod::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::conic::cop::Cop::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::conic::coo::Coo::new(), &wcs, &header, &data);
+                reproject_fits_image(mapproj::conic::coe::Coe::new(), &wcs, &header, &data);
+
+                reproject_fits_image(mapproj::hybrid::hpx::Hpx::new(), &wcs, &header, &data);
+            }
+            _ => unreachable!()
+        }
     }
 
     fn reproject_fits_image<'a, T: CanonicalProjection>(
@@ -826,11 +1053,11 @@ mod tests {
         data: &[f32],
     ) {
         let scale = header
-            .get_parsed::<f64>(b"BSCALE  ")
+            .get_parsed::<f64>("BSCALE")
             .unwrap_or(Ok(1.0))
             .unwrap() as f32;
         let offset = header
-            .get_parsed::<f64>(b"BZERO   ")
+            .get_parsed::<f64>("BZERO")
             .unwrap_or(Ok(0.0))
             .unwrap() as f32;
 
@@ -915,48 +1142,41 @@ mod tests {
 
             let f = File::open(path.clone()).unwrap();
 
-            let mut reader = BufReader::new(f);
-            let Fits { hdu } = Fits::from_reader(&mut reader).unwrap();
-            let header = hdu.get_header();
-            let wcs = WCS::from_fits_header(header).unwrap();
-
-            // add the astropy opened results
-            let path_astropy = path.with_extension("fits.csv");
-            let f = File::open(path_astropy).unwrap();
-
-            let mut rdr = csv::Reader::from_reader(BufReader::new(f));
-            for result in rdr.records() {
-                let record = result.unwrap();
-
-                let ra: f64 = record[0].parse().unwrap();
-                let dec: f64 = record[1].parse().unwrap();
-                let x: f64 = record[2].parse().unwrap();
-                let y: f64 = record[3].parse().unwrap();
-
-                if ra.is_finite() && dec.is_finite() {
-                    if let Some(img_xy) = wcs.proj(&LonLat::new(ra, dec)) {
-                        //dbg!(img_xy.x() - x);
-                        //dbg!(img_xy.y() - y);
-
-                        assert_delta!(img_xy.x(), x, 1e-4);
-                        assert_delta!(img_xy.y(), y, 1e-4);
+            let reader = BufReader::new(f);
+            let mut fits = Fits::from_reader(reader);
+            let hdu = fits.next().unwrap().unwrap();
+            match hdu {
+                HDU::XImage(hdu) | HDU::Primary(hdu) => {
+                    let header = hdu.get_header();
+                    let wcs = wcs_from_fits_header(header).unwrap();
+        
+                    // add the astropy opened results
+                    let path_astropy = path.with_extension("fits.csv");
+                    let f = File::open(path_astropy).unwrap();
+        
+                    let mut rdr = csv::Reader::from_reader(BufReader::new(f));
+                    for result in rdr.records() {
+                        let record = result.unwrap();
+        
+                        let ra: f64 = record[0].parse().unwrap();
+                        let dec: f64 = record[1].parse().unwrap();
+                        let x: f64 = record[2].parse().unwrap();
+                        let y: f64 = record[3].parse().unwrap();
+        
+                        if ra.is_finite() && dec.is_finite() {
+                            if let Some(img_xy) = wcs.proj(&LonLat::new(ra, dec)) {
+                                //dbg!(img_xy.x() - x);
+                                //dbg!(img_xy.y() - y);
+        
+                                assert_delta!(img_xy.x(), x, 1e-4);
+                                assert_delta!(img_xy.y(), y, 1e-4);
+                            }
+                        }
                     }
                 }
-            }
+                _ => unreachable!()
+            };
         }
-
-        //let f = File::open("examples/cutout-CDS_P_HST_PHAT_F475W.fits").unwrap();
-        //let f = File::open("examples/cutout-CDS_P_PanSTARRS_DR1_g.fits").unwrap();
-
-        //let f = File::open("examples/FOCx38i0101t_c0f.fits").unwrap();
-        //let f = File::open("examples/pc.fits").unwrap();
-
-        // Build the CSV reader and iterate over each record.
-        //let f = File::open("examples/pc.fits.csv").unwrap();
-        //let f = File::open("examples/cutout-CDS_P_PanSTARRS_DR1_g.fits.csv").unwrap();
-
-        //let f = File::open("examples/FOCx38i0101t_c0f.fits.csv").unwrap();
-        //let f = File::open("examples/cutout-CDS_P_HST_PHAT_F475W.fits.csv").unwrap();
     }
 
     #[test]
@@ -964,58 +1184,77 @@ mod tests {
         for entry in glob("examples/*.fits").unwrap() {
             if let Ok(path) = dbg!(entry) {
                 let f = File::open(path).unwrap();
-                let mut reader = BufReader::new(f);
-                let Fits { hdu } = Fits::from_reader(&mut reader).unwrap();
-                let header = hdu.get_header();
-                let crval1 = header
-                    .get_parsed::<f64>(b"CRVAL1  ")
-                    .unwrap_or(Ok(0.0))
-                    .unwrap();
-                let crval2 = header
-                    .get_parsed::<f64>(b"CRVAL2  ")
-                    .unwrap_or(Ok(0.0))
-                    .unwrap();
-                let crpix1 = header
-                    .get_parsed::<f64>(b"CRPIX1  ")
-                    .unwrap_or(Ok(0.0))
-                    .unwrap();
-                let crpix2 = header
-                    .get_parsed::<f64>(b"CRPIX2  ")
-                    .unwrap_or(Ok(0.0))
-                    .unwrap();
+                let reader = BufReader::new(f);
+                let mut fits = Fits::from_reader(reader);
+                let hdu = fits.next().unwrap().unwrap();
 
-                let wcs = dbg!(WCS::from_fits_header(&header)).unwrap();
-
-                // crval to crpix
-                let proj_px = wcs
-                    .proj(&LonLat::new(
-                        dbg!(crval1).to_radians(),
-                        dbg!(crval2).to_radians(),
-                    ))
-                    .unwrap();
-                assert_delta!(proj_px.x(), crpix1, 1e-6);
-                assert_delta!(proj_px.y(), crpix2, 1e-6);
-
-                // crpix to crval
-                let lonlat = wcs
-                    .unproj_lonlat(&ImgXY::new(dbg!(crpix1), dbg!(crpix2)))
-                    .unwrap();
-                assert_delta!(lonlat.lon(), crval1.to_radians(), 1e-6);
-                assert_delta!(lonlat.lat(), crval2.to_radians(), 1e-6);
+                match hdu {
+                    HDU::XImage(hdu) | HDU::Primary(hdu) => {
+                        let header = hdu.get_header();
+                        let crval1 = header
+                            .get_parsed::<f64>("CRVAL1")
+                            .unwrap_or(Ok(0.0))
+                            .unwrap();
+                        let crval2 = header
+                            .get_parsed::<f64>("CRVAL2")
+                            .unwrap_or(Ok(0.0))
+                            .unwrap();
+                        let crpix1 = if let Some(Value::Integer { value, .. }) = header.get("CRPIX1") {
+                            *value as f64
+                        } else if let Some(Value::Float { value, .. }) = header.get("CRPIX1") {
+                            *value
+                        } else {
+                            0.0
+                        };
+                        
+                        let crpix2 = if let Some(Value::Integer { value, .. }) = header.get("CRPIX2") {
+                            *value as f64
+                        } else if let Some(Value::Float { value, .. }) = header.get("CRPIX2") {
+                            *value
+                        } else {
+                            0.0
+                        };
+        
+                        let wcs = wcs_from_fits_header(&header).unwrap();
+        
+                        // crval to crpix
+                        let proj_px = wcs
+                            .proj(&LonLat::new(
+                                dbg!(crval1).to_radians(),
+                                dbg!(crval2).to_radians(),
+                            ))
+                            .unwrap();
+                        assert_delta!(proj_px.x(), crpix1, 1e-6);
+                        assert_delta!(proj_px.y(), crpix2, 1e-6);
+        
+                        // crpix to crval
+                        let lonlat = wcs
+                            .unproj_lonlat(&ImgXY::new(dbg!(crpix1), dbg!(crpix2)))
+                            .unwrap();
+                        assert_delta!(lonlat.lon(), crval1.to_radians(), 1e-6);
+                        assert_delta!(lonlat.lat(), crval2.to_radians(), 1e-6);
+                    },
+                    _ => unreachable!()
+                };
             }
         }
     }
 
+    use fitsrs::hdu::HDU;
     #[test]
     fn open_fits() {
-        //let f = File::open("examples/M81_B_GaiaHduImg1.fits").unwrap();
-        //let f = File::open("examples/SN2923fxjA.fits").unwrap();
         let f = File::open("examples/neowise.fits").unwrap();
 
-        let mut reader = BufReader::new(f);
-        let Fits { hdu } = Fits::from_reader(&mut reader).unwrap();
-        let header = hdu.get_header();
-        let wcs = WCS::from_fits_header(header).unwrap();
-        dbg!(wcs.unproj(&ImgXY::new(0.0, 1200.0)));
+        let reader = BufReader::new(f);
+        let mut fits = Fits::from_reader(reader);
+        let hdu = fits.next().unwrap().unwrap();
+        match hdu {
+            HDU::XImage(hdu) | HDU::Primary(hdu) => {
+                let header = hdu.get_header();
+                let wcs = wcs_from_fits_header(header).unwrap();
+                dbg!(wcs.unproj(&ImgXY::new(0.0, 1200.0)));
+            },
+            _ => unreachable!()
+        }
     }
 }

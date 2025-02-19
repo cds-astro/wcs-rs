@@ -104,7 +104,7 @@ macro_rules! build_sip_coeffs {
     };
 }
 
-pub fn parse_sip(params: &WCSParams, crpix1: f64, crpix2: f64) -> Result<Sip, Error> {
+pub fn parse_sip(params: &WCSParams, naxis1: i64, naxis2: i64, crpix1: f64, crpix2: f64) -> Result<Sip, Error> {
     // proj SIP coefficients
     let a_coeffs: Result<SipCoeff, Error> = build_sip_coeffs!(params, A);
     let b_coeffs: Result<SipCoeff, Error> = build_sip_coeffs!(params, B);
@@ -121,8 +121,8 @@ pub fn parse_sip(params: &WCSParams, crpix1: f64, crpix2: f64) -> Result<Sip, Er
         _ => None,
     };
 
-    let naxis1 = params.naxis1 as f64;
-    let naxis2 = params.naxis2 as f64;
+    let naxis1 = naxis1 as f64;
+    let naxis2 = naxis2 as f64;
 
     let u = (-crpix1)..=(naxis1 - crpix1);
     let v = (-crpix2)..=(naxis2 - crpix2);
