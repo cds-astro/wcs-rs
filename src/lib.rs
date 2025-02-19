@@ -3,7 +3,7 @@ extern crate mapproj;
 #[macro_use]
 extern crate quick_error;
 
-mod error;
+pub mod error;
 
 use coo_system::CooSystem;
 use error::Error;
