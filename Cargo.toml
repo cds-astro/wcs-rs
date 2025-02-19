@@ -1,6 +1,6 @@
 [package]
 name = "wcs"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 authors = ["Matthieu Baumann <matthieu.baumann@astro.unistra.fr>"]
 description = "Implementation of the FITS World Coordinate System (WCS)"
