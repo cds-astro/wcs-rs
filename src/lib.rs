@@ -1254,4 +1254,39 @@ mod tests {
             _ => unreachable!(),
         }
     }
+
+    #[test]
+    fn open_fits_tan_sip() {
+        let f = File::open("examples/sip.fits").unwrap();
+
+        let reader = BufReader::new(f);
+        let mut fits = Fits::from_reader(reader);
+        let hdu = fits.next().unwrap().unwrap();
+        match hdu {
+            HDU::XImage(hdu) | HDU::Primary(hdu) => {
+                let header = hdu.get_header();
+                let xtension = header.get_xtension();
+                let naxis = xtension.get_naxis();
+
+                let wcs = wcs_from_fits_header(header).unwrap();
+
+                let bottom_left = wcs.unproj(&ImgXY::new(1.0, 1.0)).unwrap();
+                assert_delta!(bottom_left.lon().to_degrees(), 36.228384, 1e-6);
+                assert_delta!(bottom_left.lat().to_degrees(), 42.050335, 1e-6);
+
+                let bottom_right = wcs.unproj(&ImgXY::new(naxis[0] as f64, 1.0)).unwrap();
+                assert_delta!(bottom_right.lon().to_degrees(), 36.419353, 1e-6);
+                assert_delta!(bottom_right.lat().to_degrees(), 42.050629, 1e-6);
+
+                let top_right = wcs.unproj(&ImgXY::new(naxis[0] as f64, naxis[1] as f64)).unwrap();
+                assert_delta!(top_right.lon().to_degrees(), 36.418125, 1e-6);
+                assert_delta!(top_right.lat().to_degrees(), 42.177811, 1e-6);
+
+                let top_left = wcs.unproj(&ImgXY::new(1.0, naxis[1] as f64)).unwrap();
+                assert_delta!(top_left.lon().to_degrees(), 36.225163, 1e-6);
+                assert_delta!(top_left.lat().to_degrees(), 42.177112, 1e-6);
+            }
+            _ => unreachable!(),
+        }
+    }
 }
