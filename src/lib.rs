@@ -389,95 +389,101 @@ impl WCSProj {
 
         // 2. Identify the projection type
         let ctype1 = &params.ctype1;
-        let proj_name = &ctype1[5..=7];
+        let non_linear_proj = ctype1.len() == 8 && ctype1.bytes().nth(4) == Some(b'-');
 
-        let (proj, pos_angle) = match proj_name.as_bytes() {
-            // Zenithal
-            b"AZP" => {
-                create_specific_proj!(Azp, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"SZP" => {
-                create_specific_proj!(Szp, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"TAN" => {
-                create_specific_proj!(Tan, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"STG" => {
-                create_specific_proj!(Stg, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"SIN" => {
-                create_specific_proj!(Sin, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"ARC" => {
-                create_specific_proj!(Arc, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"ZPN" => {
-                create_specific_proj!(Zpn, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"ZEA" => {
-                create_specific_proj!(Zea, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"AIR" => {
-                create_specific_proj!(Air, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"NCP" => {
-                create_specific_proj!(Ncp, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            // Cylindrical
-            b"CYP" => {
-                create_specific_proj!(Cyp, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"CEA" => {
-                create_specific_proj!(Cea, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"CAR" => {
-                create_specific_proj!(Car, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"MER" => {
-                create_specific_proj!(Mer, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            // Pseudo-cylindrical
-            b"SFL" => {
-                create_specific_proj!(Sfl, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"PAR" => {
-                create_specific_proj!(Par, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"MOL" => {
-                create_specific_proj!(Mol, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"AIT" => {
-                create_specific_proj!(Ait, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            // Conic
-            b"COP" => {
-                create_specific_proj!(Cop, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"COD" => {
-                create_specific_proj!(Cod, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"COE" => {
-                create_specific_proj!(Coe, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            b"COO" => {
-                create_specific_proj!(Coo, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            // HEALPix
-            b"HPX" => {
-                create_specific_proj!(Hpx, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
-            }
-            _ => Err(Error::NotImplementedProjection(proj_name.to_string())),
-        }?;
+        let (proj, pos_angle): (WCSCelestialProj, f64) = if non_linear_proj {
+            let proj_name = &ctype1[5..=7];
+
+            match proj_name.as_bytes() {
+                // Zenithal
+                b"AZP" => {
+                    create_specific_proj!(Azp, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"SZP" => {
+                    create_specific_proj!(Szp, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"TAN" => {
+                    create_specific_proj!(Tan, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"STG" => {
+                    create_specific_proj!(Stg, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"SIN" => {
+                    create_specific_proj!(Sin, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"ARC" => {
+                    create_specific_proj!(Arc, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"ZPN" => {
+                    create_specific_proj!(Zpn, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"ZEA" => {
+                    create_specific_proj!(Zea, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"AIR" => {
+                    create_specific_proj!(Air, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"NCP" => {
+                    create_specific_proj!(Ncp, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                // Cylindrical
+                b"CYP" => {
+                    create_specific_proj!(Cyp, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"CEA" => {
+                    create_specific_proj!(Cea, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"CAR" => {
+                    create_specific_proj!(Car, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"MER" => {
+                    create_specific_proj!(Mer, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                // Pseudo-cylindrical
+                b"SFL" => {
+                    create_specific_proj!(Sfl, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"PAR" => {
+                    create_specific_proj!(Par, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"MOL" => {
+                    create_specific_proj!(Mol, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"AIT" => {
+                    create_specific_proj!(Ait, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                // Conic
+                b"COP" => {
+                    create_specific_proj!(Cop, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"COD" => {
+                    create_specific_proj!(Cod, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"COE" => {
+                    create_specific_proj!(Coe, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                b"COO" => {
+                    create_specific_proj!(Coo, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                // HEALPix
+                b"HPX" => {
+                    create_specific_proj!(Hpx, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj)
+                }
+                _ => Err(Error::NotImplementedProjection(proj_name.to_string())),
+            }?
+        } else {
+            create_specific_proj!(Car, params, ctype1, naxis1, naxis2, crpix1, crpix2, img2proj).map_err(|e: Error| e)?
+        };
 
         let coo_system = CooSystem::parse(&params)?;
 
         Ok(WCSProj {
-            proj,
-            coo_system,
-            pos_angle,
-            s_lon,
-            s_lat,
-        })
+                proj,
+                coo_system,
+                pos_angle,
+                s_lon,
+                s_lat,
+            })
     }
 
     /// Project a (lon, lat) given in ICRS frame to get its corresponding location on the image
@@ -1219,11 +1225,11 @@ mod tests {
                         // crval to crpix
                         let proj_px = wcs
                             .proj(&LonLat::new(
-                                dbg!(crval1).to_radians(),
-                                dbg!(crval2).to_radians(),
+                                crval1.to_radians(),
+                                crval2.to_radians(),
                             ))
                             .unwrap();
-                        assert_delta!(proj_px.x(), crpix1, 1e-6);
+                        assert_delta!(dbg!(proj_px.x()), dbg!(crpix1), 1e-6);
                         assert_delta!(proj_px.y(), crpix2, 1e-6);
 
                         // crpix to crval
